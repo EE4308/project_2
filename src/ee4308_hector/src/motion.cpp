@@ -60,6 +60,7 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
 // https://docs.ros.org/en/api/sensor_msgs/html/msg/NavSatFix.html
 cv::Matx31d GPS = {NaN, NaN, NaN};
 cv::Matx31d initial_pos = {NaN, NaN, NaN}; // written below in main. no further action needed.
+cv::Matx31d initial_ECEF = {NaN, NaN, NaN};
 const double DEG2RAD = M_PI / 180;
 const double RAD_POLAR = 6356752.3;
 const double RAD_EQUATOR = 6378137;
@@ -70,30 +71,66 @@ void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
         return;
 
     //// IMPLEMENT GPS /////
-    // double lat = msg->latitude;
-    // double lon = msg->longitude;
-    // double alt = msg->altitude;
+    double lat = DEG2RAD*(msg->latitude);
+    double lon = DEG2RAD*(msg->longitude);
+    double alt = msg->altitude;
+    double e_square = 1 - ((RAD_POLAR*RAD_POLAR)/(RAD_EQUATOR*RAD_EQUATOR));
+    double n = RAD_EQUATOR/(sqrt(1-(e_square*sin(lat)*sin(lat))));
     
-    // // for initial message -- you may need this:
-    // if (std::isnan(initial_ECEF(0)))
-    // {   // calculates initial ECEF and returns
-    //     initial_ECEF = ECEF;
-    //     return;
-    // }
+    double x_e = (n+alt)*cos(lat)*cos(lon);
+    double y_e = (n+alt)*cos(lat)*sin(lon);
+    double z_e = ((n*((RAD_POLAR*RAD_POLAR)/(RAD_EQUATOR*RAD_EQUATOR)))+alt)*cos(lat)*sin(lat);
+    cv::Matx33d R_en = {-sin(lat)*cos(lon), -sin(lon), -cos(lat)*cos(lon),-sin(lat)*cos(lon),-cos(lon),-cos(lat)*sin(lon),cos(lat),0,-sin(lon)};
+    cv::Matx31d ned_coordinate = {NaN, NaN, NaN};
+    cv::Matx31d ECEF = {x_e, y_e, z_e};
+    ned_coordinate = R_en*(ECEF-initial_ECEF);
+    cv::Matx33d R_mn = {1,0,0,0,-1,0,0,0,-1};
+    GPS = R_mn*ned_coordinate + initial_pos;
+
+
+    // for initial message -- you may need this:
+    if (std::isnan(initial_ECEF(0)))
+    {   // calculates initial ECEF and returns
+        initial_ECEF = ECEF;
+        return;
+    }
     
 }
 
 // --------- Magnetic ----------
 double a_mgn = NaN;
 double r_mgn_a;
+std::list<double> yawlist;
+std::list<double>::iterator iter;
 void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
 {
     if (!ready)
         return;
     
-    //// IMPLEMENT GPS ////
-    // double mx = msg->vector.x;
-    // double my = msg->vector.y;
+    // IMPLEMENT GPS ////
+    double mx = msg->vector.x;
+    double my = msg->vector.y;
+    cv::Matx21d mH = {1,0};
+    double mV = 1;
+    double mR = r_mgn_a;
+    double yaw = atan(mx/(-my));
+    yawlist.push_back(yaw);
+    double total_yaw;
+    total_yaw += yaw;
+    double mean = total_yaw/yawlist.size();
+    //calculate varience every 100
+    if(yawlist.size() == 100){
+        for (iter = yawlist.begin();iter != yawlist.end(); iter++)
+        {
+            double val = *iter;
+            mR += (val - mean) * (val -mean);
+        }
+        mR /= yawlist.size();
+        yawlist.clear();
+    }
+
+    
+
 }
 
 // --------- Baro ----------
