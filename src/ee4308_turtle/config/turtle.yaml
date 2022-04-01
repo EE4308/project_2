@@ -1,0 +1,37 @@
+# main
+close_enough: 0.2
+target_dt: 0.04 # this (s) should be slower than or equals to main_iter_rate (Hz)
+average_speed: 0.2
+cell_size: 0.03
+inflation_radius: 0.2
+log_odds_thresh: 10 # this should be smaller than log_odds_cap
+log_odds_cap: 20
+main_iter_rate: 25 
+theta_planner: true
+
+# motion
+verbose_motion: false
+use_internal_odom: true
+axle_track: 0.16
+wheel_radius: 0.033
+weight_odom_v: 0.75
+weight_odom_w: 0.01
+straight_thresh: 0.01
+motion_iter_rate: 50
+tune: false
+
+# move
+enable_move: true
+verbose_move: false
+enable_reverse: true
+Kp_lin: 5
+Ki_lin: 0.001
+Kd_lin: 1.5
+max_lin_vel: 0.22 # max is 0.22
+max_lin_acc: 0.5
+Kp_ang: 2
+Ki_ang: 0.00001
+Kd_ang: 0.1
+max_ang_vel: 2.84 # max is 2.84
+max_ang_acc: 2
+move_iter_rate: 25
