@@ -142,8 +142,9 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
         return;
 
     //// IMPLEMENT BARO ////
-    // z_bar = msg->altitude;
-
+    // z_bar = msg->altitude;  
+    
+    
 }
 
 // --------- Sonar ----------
