@@ -54,6 +54,48 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
     uz = msg->linear_acceleration.z;
     
     //// IMPLEMENT IMU ////
+    // Jacobian Mat Definition
+    cv::Matx22d Fx_mat = {1, imu_dt,
+                          0, 1};
+    cv::Matx22d Fy_mat = {1, imu_dt,
+                          0, 1};
+    cv::Matx22d Fz_mat = {1, imu_dt,
+                          0, 1};
+    cv::Matx22d Fa_mat = {1,0,0,0};
+    cv::Matx22d Wx_mat = {(-1/2)*pow(imu_dt,2)*cos(A(0)), (1/2)*pow(imu_dt,2)*sin(A(0)),
+                          (-imu_dt)*cos(A(0)), imu_dt*sin(A(0))};
+    cv::Matx22d Wy_mat = {(-1/2)*pow(imu_dt,2)*sin(A(0)), (-1/2)*pow(imu_dt,2)*cos(A(0)),
+                          -imu_dt*sin(A(0)), -imu_dt*cos(A(0))};
+    cv::Matx21d Wz_mat = {(1/2)*pow(imu_dt,2), imu_dt};
+    cv::Matx21d Wa_mat = {imu_dt, 1};
+    cv::Matx21d Ux_mat = {ux, uy};
+    cv::Matx21d Uy_mat = {ux, uy};
+    cv::Matx22d Qx_mat = {qx, 0,
+                          0, qy};
+    cv::Matx22d Qy_mat = {qx, 0,
+                          0, qy};
+    cv::Matx21d G_mat = {(1/2)*pow(imu_dt,2)*G, imu_dt*G}; //extra matrix for Pz calculation
+
+    // previous variable reference
+    cv::Matx21d prev_X = X;
+    cv::Matx21d prev_Y = Y;
+    cv::Matx21d prev_Z = Z;
+    cv::Matx21d prev_A = A;
+    cv::Matx22d prev_Px = P_x;
+    cv::Matx22d prev_Py = P_y;
+    cv::Matx22d prev_Pz = P_z;
+    cv::Matx22d prev_Pa = P_a;
+
+    // estimate
+    X = Fx_mat * prev_X + Wx_mat * Ux_mat;
+    P_x = Fx_mat * prev_Px * Fx_mat.t() + Wx_mat * Qx_mat * Wx_mat.t();
+    Y = Fy_mat * prev_Y + Wy_mat * Uy_mat;
+    P_y = Fy_mat * prev_Py * Fy_mat.t() + Wy_mat * Qy_mat * Wy_mat.t();
+    Z = Fz_mat * prev_Z + Wz_mat * uz - G_mat;
+    P_z = Fz_mat * prev_Pz * Fz_mat.t() + Wz_mat * qz * Wz_mat.t();
+    A = Fa_mat * prev_A + Wa_mat * ua;
+    P_a = Fa_mat* prev_Pa * Fa_mat.t() + Wa_mat * qa * Wa_mat.t();
+
 }
 
 // --------- GPS ----------
