@@ -175,7 +175,7 @@ void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
         yawlist.clear();
         total_yaw =0;
     }
-    ROS_INFO("gps : %7.3f,%7.3f,%7.3f,%7.3f",msg->vector.x,msg->vector.y,r_mgn_a,a_mgn);
+    ROS_INFO("magnetometer : %7.3f,%7.3f,%7.3f,%7.3f",msg->vector.x,msg->vector.y,r_mgn_a,a_mgn);
     //altimeter 
 
 }
