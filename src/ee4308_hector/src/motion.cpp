@@ -121,11 +121,11 @@ void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
     
     double x_e = (n+alt)*cos(lat)*cos(lon);
     double y_e = (n+alt)*cos(lat)*sin(lon);
-    double z_e = ((n*((RAD_POLAR*RAD_POLAR)/(RAD_EQUATOR*RAD_EQUATOR)))+alt)*cos(lat)*sin(lat);
-    cv::Matx33d R_en = {-sin(lat)*cos(lon), -sin(lon), -cos(lat)*cos(lon),-sin(lat)*cos(lon),-cos(lon),-cos(lat)*sin(lon),cos(lat),0,-sin(lon)};
+    double z_e = ((n*((RAD_POLAR*RAD_POLAR)/(RAD_EQUATOR*RAD_EQUATOR)))+alt)*sin(lat);
+    cv::Matx33d R_en = {-sin(lat)*cos(lon), -sin(lon), -cos(lat)*cos(lon),-sin(lat)*cos(lon),cos(lon),-cos(lat)*sin(lon),cos(lat),0,-sin(lon)};
     cv::Matx31d ned_coordinate = {NaN, NaN, NaN};
     cv::Matx31d ECEF = {x_e, y_e, z_e};
-    ned_coordinate = R_en*(ECEF-initial_ECEF);
+    ned_coordinate = (R_en.t())*(ECEF-initial_ECEF);
     cv::Matx33d R_mn = {1,0,0,0,-1,0,0,0,-1};
     GPS = R_mn*ned_coordinate + initial_pos;
 
@@ -136,7 +136,10 @@ void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
         initial_ECEF = ECEF;
         return;
     }
-    
+    initial_ECEF = ECEF;
+    ROS_INFO("ned_coordinate : %7.3f,%7.3f,%7.3f",ned_coordinate(0),ned_coordinate(1),ned_coordinate(2));
+    ROS_INFO("initial_ECEF : %7.3f,%7.3f,%7.3f",initial_ECEF(0),initial_ECEF(1),initial_ECEF(2));
+    ROS_INFO("ECEF : %7.3f,%7.3f,%7.3f",ECEF(0),ECEF(1),ECEF(2));
 }
 
 // --------- Magnetic ----------
@@ -155,10 +158,10 @@ void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
     cv::Matx21d mH = {1,0};
     double mV = 1;
     double mR = r_mgn_a;
-    double yaw = atan(mx/(-my));
-    yawlist.push_back(yaw);
+    a_mgn = atan(mx/(-my));
+    yawlist.push_back(a_mgn);
     double total_yaw;
-    total_yaw += yaw;
+    total_yaw += a_mgn;
     double mean = total_yaw/yawlist.size();
     //calculate varience every 100
     if(yawlist.size() == 100){
@@ -169,9 +172,10 @@ void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
         }
         mR /= yawlist.size();
         yawlist.clear();
+        total_yaw =0;
     }
-
-    
+    ROS_INFO("gps : %7.3f,%7.3f,%7.3f,%7.3f",msg->vector.x,msg->vector.y,r_mgn_a,a_mgn);
+    //altimeter 
 
 }
 
@@ -326,6 +330,7 @@ int main(int argc, char **argv)
             ROS_INFO("[HM]   GPS(%7.3lf,%7.3lf,%7.3lf, ---- )", GPS(0), GPS(1), GPS(2));
             ROS_INFO("[HM] MAGNT( ----- , ----- , ----- ,%6.3lf)", a_mgn);
             ROS_INFO("[HM]  BARO( ----- , ----- ,%7.3lf, ---- )", z_bar);
+            
             ROS_INFO("[HM] BAROB( ----- , ----- ,%7.3lf, ---- )", Z(3));
             ROS_INFO("[HM] SONAR( ----- , ----- ,%7.3lf, ---- )", z_snr);
         }
