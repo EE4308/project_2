@@ -160,31 +160,53 @@ int main(int argc, char **argv)
         ros::spinOnce();
 
         //// IMPLEMENT ////
-        // if (state == TAKEOFF)
-        // {
-            // // Disable Rotate
-            // msg_rotate.data = false;
-            // pub_rotate.publish(msg_rotate)
-        // }
-        // else if (state == TURTLE)
-        // {
+        if (state == TAKEOFF)
+        {
+
+            if (z >= height) {
+                state = START;
+            } else {
+                // Disable Rotate
+                msg_rotate.data = false;
+                pub_rotate.publish(msg_rotate);
+                msg_target.point.x = x;
+                msg_target.point.y = y;
+                msg_target.point.z = height;
+            }
+            //Update traj towards current_pos.z = height
+            //If reach height, then update state to START
+        }
+        else if (state == TURTLE)
+        {
+            //Update traj towards Final GOAL
+            //If reach final goal, update state to goal
             
-        // }
-        // else if (state == START)
-        // {
-            // if (!nh.param("/turtle/run", false))
-            // { // when the turtle reaches the final goal
-                // state = LAND;
-            // }
-        // }
-        // else if (state == GOAL)
-        // {
+        }
+        else if (state == START)
+        {
+            // Update traj towards turtle
+            // If reach turtle, update state to turtle
+
+
+            if (!nh.param("/turtle/run", false))
+            { // when the turtle reaches the final goal
+                state = LAND;
+            }
+        }
+        else if (state == GOAL)
+        {
+
+            // Update traj towards START, if reach start, update state to start
             
-        // }
-        // else if (state == LAND)
-        // {
+        }
+        else if (state == LAND)
+        {
             
-        // }
+        }
+        
+        
+        // Publish target
+        pub_target.publish(msg_target);
 
         if (verbose)
             ROS_INFO_STREAM(" HMAIN : " << to_string(state));
