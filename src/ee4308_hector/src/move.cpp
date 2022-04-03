@@ -15,13 +15,29 @@
 #include "common.hpp"
 #define NaN std::numeric_limits<double>::quiet_NaN()
 
+double sat(double x, double x2)
+{
+    if (x > x2)
+    {
+        return x2;
+    }
+    else if (x < -x2)
+    {
+        return -x2;
+    }
+    else
+    {
+        return x;
+    }
+}
+
 ros::ServiceClient en_mtrs;
 void disable_motors(int sig)
 {
     ROS_INFO(" HMOVE : Disabling motors...");
     hector_uav_msgs::EnableMotors en_mtrs_srv;
     en_mtrs_srv.request.enable = false;
-    en_mtrs.call(en_mtrs_srv); 
+    en_mtrs.call(en_mtrs_srv);
 }
 
 double target_x = NaN, target_y = NaN, target_z = NaN;
@@ -97,7 +113,7 @@ int main(int argc, char **argv)
     double move_iter_rate;
     if (!nh.param("move_iter_rate", move_iter_rate, 25.0))
         ROS_WARN(" HMOVE : Param move_iter_rate not found, set to 25");
-    
+
     // --------- Enable Motors ----------
     ROS_INFO(" HMOVE : Enabling motors...");
     en_mtrs = nh.serviceClient<hector_uav_msgs::EnableMotors>("enable_motors");
@@ -121,7 +137,7 @@ int main(int argc, char **argv)
     // --------- Wait for Topics ----------
     ROS_INFO(" HMOVE : Waiting for topics");
     while (ros::ok() && nh.param("run", true) && (std::isnan(target_x) || std::isnan(x))) // not dependent on main.cpp, but on motion.cpp
-        ros::spinOnce(); // update the topics
+        ros::spinOnce();                                                                  // update the topics
 
     // --------- Begin Controller ----------
     ROS_INFO(" HMOVE : ===== BEGIN =====");
@@ -129,6 +145,70 @@ int main(int argc, char **argv)
     double cmd_lin_vel_x, cmd_lin_vel_y, cmd_lin_vel_z, cmd_lin_vel_a;
     double dt;
     double prev_time = ros::Time::now().toSec();
+
+    // Setup Variables
+    cv::Matx31d XYZ;
+    cv::Matx31d LOCAL_NED_XYZ;
+    cv::Matx31d TARGET_NED_XYZ;
+    cv::Matx33d R = {
+        1, 0, 0,
+        0, -1, 0,
+        0, 0, -1};
+
+    double error_lin_z;
+    double error_lin_z_prev = 0;
+    double error_lin_z_sum = 0;
+    double P_lin_z = 0;
+    double I_lin_z = 0;
+    double D_lin_z = 0;
+    double U_lin_z = 0;
+    double lin_acc_z;
+    double cmd_lin_vel_z_prev = 0;
+
+    double error_lin_x;
+    double error_lin_x_prev = 0;
+    double error_lin_x_sum = 0;
+    double P_lin_x = 0;
+    double I_lin_x = 0;
+    double D_lin_x = 0;
+    double U_lin_x = 0;
+    double lin_acc_x;
+    double cmd_lin_vel_x_prev = 0;
+
+    double error_lin_y;
+    double error_lin_y_prev = 0;
+    double error_lin_y_sum = 0;
+    double P_lin_y = 0;
+    double I_lin_y = 0;
+    double D_lin_y = 0;
+    double U_lin_y = 0;
+    double lin_acc_y;
+    double cmd_lin_vel_y_prev = 0;
+    
+
+    // double cmd_lin_vel = 0, cmd_ang_vel = 0;
+
+    // double error_lin;
+    // double error_lin_prev = 0;
+    // double error_lin_sum =0;
+    // double P_lin = 0;
+    // double I_lin = 0;
+    // double D_lin = 0;
+    // double U_lin = 0;
+    // double lin_acc;
+    // double cmd_lin_vel_prev =0;
+
+    // double ang_error ;
+    // double ang_error_prev = 0;
+    // double ang_error_sum = 0;
+    // double P_ang = 0;
+    // double I_ang = 0;
+    // double D_ang = 0;
+    // double U_ang = 0;
+    // double ang_acc;
+    // double cmd_ang_vel_prev =0;
+
+    // int cnt =0;
 
     // main loop
     while (ros::ok() && nh.param("run", true))
@@ -141,6 +221,52 @@ int main(int argc, char **argv)
             continue;
         prev_time += dt;
 
+        ////////////////// MOTION CONTROLLER HERE //////////////////
+        ROS_INFO("TARGET_Z %f", target_z);
+        ROS_INFO("z%f", z);
+        XYZ = {x, y, z};
+        LOCAL_NED_XYZ = R * XYZ;
+        TARGET_NED_XYZ = R * cv::Matx31d({target_x, target_y, target_z});
+        ROS_INFO_STREAM("LOCAL_NED_XYZ " << LOCAL_NED_XYZ);
+        ROS_INFO_STREAM("TARGET_NED_XYZ" << TARGET_NED_XYZ);
+
+        error_lin_z = LOCAL_NED_XYZ(0, 2) - TARGET_NED_XYZ(0, 2); // Z_Local - Z_Target
+        error_lin_z_sum += error_lin_z * dt;
+        P_lin_z = Kp_z * error_lin_z;
+        I_lin_z = I_lin_z + (Ki_z * error_lin_z);
+        D_lin_z = Kd_z * ((error_lin_z - error_lin_z_prev) / dt);
+        U_lin_z = P_lin_z + I_lin_z + D_lin_z;
+        error_lin_z_prev = error_lin_z;
+
+        lin_acc_z = (U_lin_z - cmd_lin_vel_z_prev) / dt;
+        cmd_lin_vel_z_prev = cmd_lin_vel_z;
+        cmd_lin_vel_z = sat((U_lin_z + lin_acc_z * dt), max_z_vel);
+
+
+        error_lin_x_sum += error_lin_x * dt;
+        P_lin_x = Kp_lin * error_lin_x;
+        I_lin_x = I_lin_x + (Ki_lin * error_lin_x);
+        D_lin_x = Kd_lin * ((error_lin_x - error_lin_x_prev) / dt);
+        U_lin_x = P_lin_x + I_lin_x + D_lin_x;
+        error_lin_x_prev = error_lin_x;
+
+        lin_acc_x = (U_lin_x - cmd_lin_vel_x_prev) / dt;
+        cmd_lin_vel_x_prev = cmd_lin_vel_x;
+        cmd_lin_vel_x = sat((U_lin_x + lin_acc_x * dt), max_lin_vel);
+
+        error_lin_y_sum += error_lin_y * dt;
+        P_lin_y = Kp_lin * error_lin_y;
+        I_lin_y = I_lin_y + (Ki_lin * error_lin_y);
+        D_lin_y = Kd_lin * ((error_lin_y - error_lin_y_prev) / dt);
+        U_lin_y = P_lin_y + I_lin_y + D_lin_y;
+        error_lin_y_prev = error_lin_y;
+
+        lin_acc_y = (U_lin_y - cmd_lin_vel_y_prev) / dt;
+        cmd_lin_vel_y_prev = cmd_lin_vel_y;
+        cmd_lin_vel_y = sat((U_lin_y + lin_acc_y * dt), max_lin_vel);
+
+
+
         // publish speeds
         msg_cmd.linear.x = cmd_lin_vel_x;
         msg_cmd.linear.y = cmd_lin_vel_y;
@@ -149,7 +275,7 @@ int main(int argc, char **argv)
         pub_cmd.publish(msg_cmd);
 
         //// IMPLEMENT /////
-        
+
         // verbose
         if (verbose)
         {
