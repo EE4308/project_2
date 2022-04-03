@@ -113,6 +113,7 @@ void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
         return;
 
     //// IMPLEMENT GPS /////
+    ROS_INFO("initial_ECEF : %7.3f,%7.3f,%7.3f",initial_ECEF(0),initial_ECEF(1),initial_ECEF(2));
     double lat = DEG2RAD*(msg->latitude);
     double lon = DEG2RAD*(msg->longitude);
     double alt = msg->altitude;
@@ -138,7 +139,7 @@ void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
     }
     initial_ECEF = ECEF;
     ROS_INFO("ned_coordinate : %7.3f,%7.3f,%7.3f",ned_coordinate(0),ned_coordinate(1),ned_coordinate(2));
-    ROS_INFO("initial_ECEF : %7.3f,%7.3f,%7.3f",initial_ECEF(0),initial_ECEF(1),initial_ECEF(2));
+    
     ROS_INFO("ECEF : %7.3f,%7.3f,%7.3f",ECEF(0),ECEF(1),ECEF(2));
 }
 
