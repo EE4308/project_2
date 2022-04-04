@@ -153,15 +153,14 @@ void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
     ROS_INFO("ECEF : %7.3f,%7.3f,%7.3f",ECEF(0),ECEF(1),ECEF(2));
     
 
-    // EKF for gps
+    // correction step
     
 }
 
 // --------- Magnetic ----------
 double a_mgn = NaN;
 double r_mgn_a;
-std::list<double> yawlist;
-std::list<double>::iterator iter;
+std::vector<double> yawlist;
 void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
 {
     if (!ready)
@@ -175,22 +174,12 @@ void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
 
     
     a_mgn = atan2(my,mx);
-
-
     yawlist.push_back(a_mgn);
-    double total_yaw;
-    total_yaw += a_mgn;
-    double mean = total_yaw/yawlist.size();
+
     //calculate varience every 100
-    if(yawlist.size() >= 100){
-        for (iter = yawlist.begin();iter != yawlist.end(); iter++)
-        {
-            double val = *iter;
-            r_mgn_a += (val - mean) * (val -mean);
-        }
-        r_mgn_a /= yawlist.size();
+    if(yawlist.size() > 100){
+        r_mgn_a = variance(yawlist);
         yawlist.clear();
-        total_yaw =0;
     }
     
     ROS_INFO("magnetometer : %7.3f,%7.3f,%7.3f,%7.3f",msg->vector.x,msg->vector.y,r_mgn_a,a_mgn);
@@ -218,19 +207,19 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
 
     // change Z matrix to include bias
     Z = {Z(0), Z(1), 0};
-    z_bar_list.pushback(z_bar);
+    z_bar_list.push_back(z_bar);
     z_bar_mean = mean(z_bar_list);
-    Z(2) = z_bar_mean;
-    z_bar = z_bar - z_bar_mean;
+    Z(2) = z_bar - z_bar_mean; // bias calculation
+    z_bar = z_bar - Z(2);
     z_bar_adjusted_list.push_back(z_bar);
 
-    // calculate variance for z_bar
+    //calculate varience every 100
     if (z_bar_adjusted_list.size() > 100) {
         r_bar_z = variance(z_bar_adjusted_list); 
         z_bar_adjusted_list.clear();
     }
 
-    // correction
+    // correction step
     
 }
 
@@ -246,11 +235,14 @@ void cbSonar(const sensor_msgs::Range::ConstPtr &msg)
     //// IMPLEMENT SONAR ////
     z_snr = msg->range;
     sonar_list.push_back(z_snr);
-    // variance
+
+    //calculate varience every 100
     if (sonar_list.size() > 100) {
         r_snr_z = variance(sonar_list); 
         sonar_list.clear();
     }
+
+    //correction step
 }
 
 // --------- GROUND TRUTH ----------
