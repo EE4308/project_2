@@ -153,6 +153,11 @@ void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
     ROS_INFO("ECEF : %7.3f,%7.3f,%7.3f",ECEF(0),ECEF(1),ECEF(2));
     
 
+    //define 
+    double y_gps = GPS(0);
+    cv::Matx12d h_gps = {1,0};
+    double v_gpps = 1;
+    double r_gps = r_gps_x;
     // correction step
     
 }
@@ -169,9 +174,7 @@ void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
     // IMPLEMENT GPS ////
     double mx = msg->vector.x;
     double my = msg->vector.y;
-    cv::Matx21d mH = {1,0};
-    double mV = 1;
-
+    
     
     a_mgn = atan2(my,mx);
     yawlist.push_back(a_mgn);
@@ -185,6 +188,8 @@ void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
     ROS_INFO("magnetometer : %7.3f,%7.3f,%7.3f,%7.3f",msg->vector.x,msg->vector.y,r_mgn_a,a_mgn);
 
     //correction step 
+    cv::Matx12d H_mag = {1,0};
+    double mV = 1;
 
 
 }
@@ -220,7 +225,10 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
     }
 
     // correction step
-    
+    double y_bar = z_bar;
+    cv::Matx12d H_bar = {1,0};
+    double v_bar = 1;
+    double r_bar = r_bar_z;
 }
 
 // --------- Sonar ----------
@@ -236,6 +244,9 @@ void cbSonar(const sensor_msgs::Range::ConstPtr &msg)
     z_snr = msg->range;
     sonar_list.push_back(z_snr);
 
+
+    //check if the value is changing more than min height
+    
     //calculate varience every 100
     if (sonar_list.size() > 100) {
         r_snr_z = variance(sonar_list); 
@@ -243,6 +254,10 @@ void cbSonar(const sensor_msgs::Range::ConstPtr &msg)
     }
 
     //correction step
+    double y_snr = z_snr;
+    cv::Matx12d H_sonar = {1,0};
+    double v_snr = 1;
+    double r_snr = r_snr_z;
 }
 
 // --------- GROUND TRUTH ----------
