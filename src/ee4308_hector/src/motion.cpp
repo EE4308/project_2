@@ -55,28 +55,37 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
     
     //// IMPLEMENT IMU ////
     // Jacobian Mat Definition
+    // x 
     cv::Matx22d Fx_mat = {1, imu_dt,
                           0, 1};
-    cv::Matx22d Fy_mat = {1, imu_dt,
-                          0, 1};
-    cv::Matx22d Fz_mat = {1, imu_dt,
-                          0, 1};
-    cv::Matx22d Fa_mat = {1,0,0,0};
-    cv::Matx22d Wx_mat = {(-1/2)*pow(imu_dt,2)*cos(A(0)), (1/2)*pow(imu_dt,2)*sin(A(0)),
+    cv::Matx22d Wx_mat = {(-0.5)*pow(imu_dt,2)*cos(A(0)), (0.5)*pow(imu_dt,2)*sin(A(0)),
                           (-imu_dt)*cos(A(0)), imu_dt*sin(A(0))};
-    cv::Matx22d Wy_mat = {(-1/2)*pow(imu_dt,2)*sin(A(0)), (-1/2)*pow(imu_dt,2)*cos(A(0)),
-                          -imu_dt*sin(A(0)), -imu_dt*cos(A(0))};
-    cv::Matx21d Wz_mat = {(1/2)*pow(imu_dt,2), imu_dt};
-    cv::Matx21d Wa_mat = {imu_dt, 1};
-    cv::Matx21d Ux_mat = {ux, uy};
-    cv::Matx21d Uy_mat = {ux, uy};
     cv::Matx22d Qx_mat = {qx, 0,
                           0, qy};
-    cv::Matx22d Qy_mat = {qx, 0,
-                          0, qy};
-    cv::Matx21d G_mat = {(1/2)*pow(imu_dt,2)*G, imu_dt*G}; //extra matrix for Pz calculation
+    
+    // y
+    cv::Matx22d Fy_mat = {1, imu_dt,
+                          0, 1};
+    cv::Matx22d Wy_mat = {(-0.5)*pow(imu_dt,2)*sin(A(0)), (-0.5)*pow(imu_dt,2)*cos(A(0)),
+                          -imu_dt*sin(A(0)), -imu_dt*cos(A(0))};
+    cv::Matx22d Qy_mat = {qy, 0,
+                          0, qx};
+    
+    // z
+    cv::Matx22d Fz_mat = {1, imu_dt,
+                          0, 1};
+    cv::Matx21d Wz_mat = {(0.5)*pow(imu_dt,2), imu_dt};
+
+    // a
+    cv::Matx22d Fa_mat = {1,0,0,0};
+    cv::Matx21d Wa_mat = {imu_dt, 1};
+    
+    cv::Matx21d Ux_mat = {ux, uy};
+    cv::Matx21d Uy_mat = {ux, uy};
+    cv::Matx21d G_mat = {(0.5)*pow(imu_dt,2)*G, imu_dt*G}; //extra matrix for Pz calculation
 
     // previous variable reference
+    /* 
     cv::Matx21d prev_X = X;
     cv::Matx21d prev_Y = Y;
     cv::Matx21d prev_Z = Z;
@@ -85,16 +94,17 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
     cv::Matx22d prev_Py = P_y;
     cv::Matx22d prev_Pz = P_z;
     cv::Matx22d prev_Pa = P_a;
+    */ 
 
     // estimate
-    X = Fx_mat * prev_X + Wx_mat * Ux_mat;
-    P_x = Fx_mat * prev_Px * Fx_mat.t() + Wx_mat * Qx_mat * Wx_mat.t();
-    Y = Fy_mat * prev_Y + Wy_mat * Uy_mat;
-    P_y = Fy_mat * prev_Py * Fy_mat.t() + Wy_mat * Qy_mat * Wy_mat.t();
-    Z = Fz_mat * prev_Z + Wz_mat * uz - G_mat;
-    P_z = Fz_mat * prev_Pz * Fz_mat.t() + Wz_mat * qz * Wz_mat.t();
-    A = Fa_mat * prev_A + Wa_mat * ua;
-    P_a = Fa_mat* prev_Pa * Fa_mat.t() + Wa_mat * qa * Wa_mat.t();
+    X = Fx_mat * X + Wx_mat * Ux_mat;
+    P_x = Fx_mat * P_x * Fx_mat.t() + Wx_mat * Qx_mat * Wx_mat.t();
+    Y = Fy_mat * Y + Wy_mat * Uy_mat;
+    P_y = Fy_mat * P_y * Fy_mat.t() + Wy_mat * Qy_mat * Wy_mat.t();
+    Z = Fz_mat * Z + Wz_mat * uz - G_mat;
+    P_z = Fz_mat * P_z * Fz_mat.t() + Wz_mat * qz * Wz_mat.t();
+    A = Fa_mat * A + Wa_mat * ua;
+    P_a = Fa_mat* P_a * Fa_mat.t() + Wa_mat * qa * Wa_mat.t();
 
 }
 
@@ -159,7 +169,7 @@ void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
     cv::Matx21d mH = {1,0};
     double mV = 1;
     double mR = r_mgn_a;
-    a_mgn = atan(mx/(-my));
+    a_mgn = atan2(-my/mx);
     yawlist.push_back(a_mgn);
     double total_yaw;
     total_yaw += a_mgn;
@@ -176,21 +186,47 @@ void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
         total_yaw =0;
     }
     ROS_INFO("magnetometer : %7.3f,%7.3f,%7.3f,%7.3f",msg->vector.x,msg->vector.y,r_mgn_a,a_mgn);
-    //altimeter 
+
+
+    // correction 
 
 }
 
 // --------- Baro ----------
 double z_bar = NaN;
 double r_bar_z;
+double z_bar_mean;
+std::vector<double> z_bar_list;
+std::vector<double> z_bar_adjusted_list;
+
+
 void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
 {
     if (!ready)
         return;
 
     //// IMPLEMENT BARO ////
-    // z_bar = msg->altitude;  
-    
+    z_bar = msg->altitude;
+    Z = {Z(0), Z(1), 0};
+    z_bar_list.pushback(z_bar);
+    z_bar_mean = mean(z_bar_list);
+    Z(2) = z_bar_mean;
+    z_bar = z_bar - z_bar_mean;
+    z_bar_adjusted_list.push_back(z_bar);
+
+    // calculate variance for z_bar
+    if (z_bar_adjusted_list.size() > 100) {
+        for (iter = z_bar_adjusted_list.begin();iter != z_bar_adjusted_list.end(); iter++)
+        {
+            float mean_list = mean(z_bar_adjusted_list);
+            double val = *iter;
+            r_bar_z += (val - mean_list) * (val - mean_list);
+        }
+        r_bar_z /= z_bar_adjusted_list.size();
+        z_bar_adjusted_list.clear();
+    }
+
+    // correction
     
 }
 
@@ -203,8 +239,9 @@ void cbSonar(const sensor_msgs::Range::ConstPtr &msg)
         return;
 
     //// IMPLEMENT SONAR ////
-    // z_snr = msg->range;
+    z_snr = msg->range;
 
+    // variance
 }
 
 // --------- GROUND TRUTH ----------
