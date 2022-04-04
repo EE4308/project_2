@@ -207,6 +207,8 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
 
     //// IMPLEMENT BARO ////
     z_bar = msg->altitude;
+
+    // change Z matrix to include bias
     Z = {Z(0), Z(1), 0};
     z_bar_list.pushback(z_bar);
     z_bar_mean = mean(z_bar_list);
@@ -216,13 +218,7 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
 
     // calculate variance for z_bar
     if (z_bar_adjusted_list.size() > 100) {
-        for (iter = z_bar_adjusted_list.begin();iter != z_bar_adjusted_list.end(); iter++)
-        {
-            float mean_list = mean(z_bar_adjusted_list);
-            double val = *iter;
-            r_bar_z += (val - mean_list) * (val - mean_list);
-        }
-        r_bar_z /= z_bar_adjusted_list.size();
+        r_bar_z = variance(z_bar_adjusted_list); 
         z_bar_adjusted_list.clear();
     }
 
@@ -233,6 +229,7 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
 // --------- Sonar ----------
 double z_snr = NaN;
 double r_snr_z;
+std::vector<double> sonar_list;
 void cbSonar(const sensor_msgs::Range::ConstPtr &msg)
 {
     if (!ready)
@@ -241,7 +238,12 @@ void cbSonar(const sensor_msgs::Range::ConstPtr &msg)
     //// IMPLEMENT SONAR ////
     z_snr = msg->range;
 
+    sonar_list.push_back(z_snr);
     // variance
+    if (sonar_list.size() > 100) {
+        r_snr_z = variance(sonar_list); 
+        sonar_list.clear();
+    }
 }
 
 // --------- GROUND TRUTH ----------

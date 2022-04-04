@@ -79,3 +79,24 @@ double limit_angle(double angle)
     double result = fmod(angle + M_PI, M_PI*2); // fmod rounds remainders to zero. we want remainders to be +ve like mod() in matlab and % in python
     return result >= 0 ? result - M_PI : result + M_PI;
 }
+
+double variance(std::vector<double> vec)
+{
+    double var = 0;
+    double mean_temp;
+    
+    mean_temp =  mean(vec);
+    for (int i = 0; i < vec.size(); i++){
+        var += (vec.at(i) - mean_temp) * (vec.at(i) - mean_temp);
+    }
+    return var/vec.size()
+}
+
+double mean(std::vector<double> vec)
+{
+    double sum = 0;
+    for (int i = 0; i < vec.size(); i++){
+        sum += vec.at(i);
+    }
+    return sum/vec.size()
+}

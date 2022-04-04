@@ -1,5 +1,6 @@
 #ifndef COMMON_HPP
 #define COMMON_HPP
+#include <vector>
 
 struct Index
 {
@@ -23,5 +24,8 @@ double dist_euc(double src_x, double src_y, double tgt_x, double tgt_y);
 double heading(Position src, Position tgt); // overload
 double heading(double src_x, double src_y, double tgt_x, double tgt_y);
 double limit_angle(double angle);
+double variance(std::vector<double> vec);
+double mean(std::vector<double> vec);
+
 
 #endif
