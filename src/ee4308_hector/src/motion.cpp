@@ -141,6 +141,10 @@ void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
     ROS_INFO("ned_coordinate : %7.3f,%7.3f,%7.3f",ned_coordinate(0),ned_coordinate(1),ned_coordinate(2));
     
     ROS_INFO("ECEF : %7.3f,%7.3f,%7.3f",ECEF(0),ECEF(1),ECEF(2));
+    
+
+    // EKF for gps
+    
 }
 
 // --------- Magnetic ----------
@@ -158,25 +162,26 @@ void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
     double my = msg->vector.y;
     cv::Matx21d mH = {1,0};
     double mV = 1;
-    double mR = r_mgn_a;
-    a_mgn = atan(mx/(-my));
+    
+    a_mgn = atan2(my,mx);
     yawlist.push_back(a_mgn);
     double total_yaw;
     total_yaw += a_mgn;
     double mean = total_yaw/yawlist.size();
     //calculate varience every 100
-    if(yawlist.size() == 100){
+    if(yawlist.size() >= 100){
         for (iter = yawlist.begin();iter != yawlist.end(); iter++)
         {
             double val = *iter;
-            mR += (val - mean) * (val -mean);
+            r_mgn_a += (val - mean) * (val -mean);
         }
-        mR /= yawlist.size();
+        r_mgn_a /= yawlist.size();
         yawlist.clear();
         total_yaw =0;
     }
+    
     ROS_INFO("magnetometer : %7.3f,%7.3f,%7.3f,%7.3f",msg->vector.x,msg->vector.y,r_mgn_a,a_mgn);
-    //altimeter 
+    //correction step 
 
 }
 
@@ -203,7 +208,10 @@ void cbSonar(const sensor_msgs::Range::ConstPtr &msg)
         return;
 
     //// IMPLEMENT SONAR ////
-    // z_snr = msg->range;
+    z_snr = msg->range;
+    
+
+    
 
 }
 
@@ -331,7 +339,6 @@ int main(int argc, char **argv)
             ROS_INFO("[HM]   GPS(%7.3lf,%7.3lf,%7.3lf, ---- )", GPS(0), GPS(1), GPS(2));
             ROS_INFO("[HM] MAGNT( ----- , ----- , ----- ,%6.3lf)", a_mgn);
             ROS_INFO("[HM]  BARO( ----- , ----- ,%7.3lf, ---- )", z_bar);
-            
             ROS_INFO("[HM] BAROB( ----- , ----- ,%7.3lf, ---- )", Z(3));
             ROS_INFO("[HM] SONAR( ----- , ----- ,%7.3lf, ---- )", z_snr);
         }
