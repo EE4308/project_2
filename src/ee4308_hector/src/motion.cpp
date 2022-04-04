@@ -245,13 +245,6 @@ void cbSonar(const sensor_msgs::Range::ConstPtr &msg)
 
     //// IMPLEMENT SONAR ////
     z_snr = msg->range;
-<<<<<<< HEAD
-    
-
-    
-=======
->>>>>>> d13452659534ed5b30ea89814a229c2cb153e2b6
-
     sonar_list.push_back(z_snr);
     // variance
     if (sonar_list.size() > 100) {

@@ -89,7 +89,7 @@ double variance(std::vector<double> vec)
     for (int i = 0; i < vec.size(); i++){
         var += (vec.at(i) - mean_temp) * (vec.at(i) - mean_temp);
     }
-    return var/vec.size()
+    return var/vec.size();
 }
 
 double mean(std::vector<double> vec)
@@ -98,5 +98,5 @@ double mean(std::vector<double> vec)
     for (int i = 0; i < vec.size(); i++){
         sum += vec.at(i);
     }
-    return sum/vec.size()
+    return sum/vec.size();
 }
