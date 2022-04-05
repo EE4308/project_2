@@ -27,10 +27,10 @@ const double G = 9.8;
 double prev_imu_t = 0;
 cv::Matx21d X = {0, 0}, Y = {0, 0}; // see intellisense. This is equivalent to cv::Matx<double, 2, 1>
 cv::Matx21d A = {0, 0};
-cv::Matx21d Z = {0, 0};
+cv::Matx31d Z = {0, 0, 0};
 cv::Matx22d P_x = cv::Matx22d::ones(), P_y = cv::Matx22d::zeros();
 cv::Matx22d P_a = cv::Matx22d::ones();
-cv::Matx22d P_z = cv::Matx22d::ones();
+cv::Matx33d P_z = cv::Matx33d::ones();
 double ua = NaN, ux = NaN, uy = NaN, uz = NaN;
 double qa, qx, qy, qz;
 // see https://docs.opencv.org/3.4/de/de1/classcv_1_1Matx.html
@@ -72,9 +72,10 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
                           0, qx};
     
     // z
-    cv::Matx22d Fz_mat = {1, imu_dt,
-                          0, 1};
-    cv::Matx21d Wz_mat = {(0.5)*pow(imu_dt,2), imu_dt};
+    cv::Matx33d Fz_mat = {1, imu_dt, 0,
+                          0, 1, 0,
+                          0, 0, 1};
+    cv::Matx31d Wz_mat = {(0.5)*pow(imu_dt,2), imu_dt, 0};
 
     // a
     cv::Matx22d Fa_mat = {1,0,0,0};
@@ -82,7 +83,7 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
     
     cv::Matx21d Ux_mat = {ux, uy};
     cv::Matx21d Uy_mat = {ux, uy};
-    cv::Matx21d G_mat = {(0.5)*pow(imu_dt,2)*G, imu_dt*G}; //extra matrix for Pz calculation
+    double Uz = uz - G;
 
     // previous variable reference
     /* 
@@ -101,7 +102,7 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
     P_x = Fx_mat * P_x * Fx_mat.t() + Wx_mat * Qx_mat * Wx_mat.t();
     Y = Fy_mat * Y + Wy_mat * Uy_mat;
     P_y = Fy_mat * P_y * Fy_mat.t() + Wy_mat * Qy_mat * Wy_mat.t();
-    Z = Fz_mat * Z + Wz_mat * uz - G_mat;
+    Z = Fz_mat * Z + Wz_mat * Uz;
     P_z = Fz_mat * P_z * Fz_mat.t() + Wz_mat * qz * Wz_mat.t();
     A = Fa_mat * A + Wa_mat * ua;
     P_a = Fa_mat* P_a * Fa_mat.t() + Wa_mat * qa * Wa_mat.t();
@@ -160,17 +161,19 @@ void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
     double h_X_gpsx = X(0);
     double h_X_gpsy = Y(0);
     double h_X_gpsz = Z(0);
-    cv::Matx12d H_gps = {1,0};     
+    cv::Matx12d H_gps = {1,0};
+    cv::Matx13d H_gpsz = {1, 0, 0};     
     double V_gps = 1;
     double R_gpsx = r_gps_x;
     double R_gpsy = r_gps_y;
     double R_gpsz = r_gps_z;
 
-    cv::Matx21d K_gpsx, K_gpsy, K_gpsz;
+    cv::Matx21d K_gpsx, K_gpsy;
+    cv::Matx31d K_gpsz;
     // correction step
     K_gpsx = P_x * H_gps.t() * (1/((H_gps * P_x * H_gps.t())(0) + V_gps * R_gpsx * V_gps));
     K_gpsy = P_y * H_gps.t() * (1/((H_gps * P_y * H_gps.t())(0) + V_gps * R_gpsy * V_gps));
-    K_gpsz = P_z * H_gps.t() * (1/((H_gps * P_z * H_gps.t())(0) + V_gps * R_gpsz * V_gps));
+    K_gpsz = P_z * H_gpsz.t() * (1/((H_gpsz * P_z * H_gpsz.t())(0) + V_gps * R_gpsz * V_gps));
     
     X = X + K_gpsx * (Y_gpsx - h_X_gpsx);
     Y = Y + K_gpsy * (Y_gpsy - h_X_gpsy);
@@ -178,7 +181,7 @@ void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
 
     P_x = P_x - K_gpsx * H_gps * P_x;
     P_y = P_y - K_gpsy * H_gps * P_y;
-    P_z = P_z - K_gpsz * H_gps * P_z;
+    P_z = P_z - K_gpsz * H_gpsz * P_z;
     
 }
 
@@ -225,11 +228,7 @@ void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
 // --------- Baro ----------
 double z_bar = NaN;
 double r_bar_z;
-double z_bar_mean;
 std::vector<double> z_bar_list;
-std::vector<double> z_bar_adjusted_list;
-
-
 void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
 {
     if (!ready)
@@ -237,26 +236,25 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
 
     //// IMPLEMENT BARO ////
     z_bar = msg->altitude;
-
-    // change Z matrix to include bias
-    Z = {Z(0), Z(1), 0};
     z_bar_list.push_back(z_bar);
-    z_bar_mean = mean(z_bar_list);
-    Z(2) = z_bar - z_bar_mean; // bias calculation
-    z_bar = z_bar - Z(2);
-    z_bar_adjusted_list.push_back(z_bar);
-
     //calculate varience every 100
-    if (z_bar_adjusted_list.size() > 100) {
-        r_bar_z = variance(z_bar_adjusted_list); 
-        z_bar_adjusted_list.clear();
+    if (z_bar_list.size() > 100) {
+        r_bar_z = variance(z_bar_list); 
+        z_bar_list.clear();
     }
 
-    // correction step
+    // define
     double Y_bar = z_bar;
-    cv::Matx12d H_bar = {1,0};
+    double h_X_bar = Z(0);
+    cv::Matx13d H_bar = {1, 0, 1};
     double V_bar = 1;
     double R_bar = r_bar_z;
+
+    cv::Matx31d K_bar;
+    // correction
+    K_bar = P_z * H_bar.t() * (1/((H_bar * P_z * H_bar.t())(0) + V_bar * R_bar * V_bar));
+    Z = Z + K_bar * (Y_bar - h_X_bar - Z(2));
+    P_z = P_z - K_bar * H_bar * P_z;
 }
 
 // --------- Sonar ----------
@@ -292,12 +290,12 @@ void cbSonar(const sensor_msgs::Range::ConstPtr &msg)
     //define
     double Y_snr = z_snr;
     double h_X_snr = Z(0);
-    cv::Matx12d H_snr = {1,0};
+    cv::Matx13d H_snr = {1, 0 , 0};
     double V_snr = 1;
     double R_snr = r_snr_z;
 
     //correction step
-    cv::Matx21d K_snr;
+    cv::Matx31d K_snr;
     K_snr = P_z * H_snr.t() * (1/(((H_snr * P_z * H_snr.t())(0) + V_snr * R_snr * V_snr)));
     Z = Z + K_snr * (Y_snr - h_X_snr);
     P_z = P_z - K_snr * H_snr * P_z;
