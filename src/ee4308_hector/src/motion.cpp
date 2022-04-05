@@ -105,7 +105,7 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
     P_z = Fz_mat * P_z * Fz_mat.t() + Wz_mat * qz * Wz_mat.t();
     A = Fa_mat * A + Wa_mat * ua;
     P_a = Fa_mat* P_a * Fa_mat.t() + Wa_mat * qa * Wa_mat.t();
-
+    ROS_INFO("ux: %.3f, uy: %.3f, uz: %.3f, ua: %.3f", ux, uy, uz, ua);
 }
 
 // --------- GPS ----------
@@ -154,12 +154,31 @@ void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
     
 
     //define 
-    double Y_gps = GPS(0);
+    double Y_gpsx = GPS(0);
+    double Y_gpsy = GPS(1);
+    double Y_gpsz = GPS(2);
+    double h_X_gpsx = X(0);
+    double h_X_gpsy = Y(0);
+    double h_X_gpsz = Z(0);
     cv::Matx12d H_gps = {1,0};     
     double V_gps = 1;
-    double R_gps = r_gps_x;
+    double R_gpsx = r_gps_x;
+    double R_gpsy = r_gps_y;
+    double R_gpsz = r_gps_z;
+
+    cv::Matx21d K_gpsx, K_gpsy, K_gpsz;
     // correction step
+    K_gpsx = P_x * H_gps.t() * (1/((H_gps * P_x * H_gps.t())(0) + V_gps * R_gpsx * V_gps));
+    K_gpsy = P_y * H_gps.t() * (1/((H_gps * P_y * H_gps.t())(0) + V_gps * R_gpsy * V_gps));
+    K_gpsz = P_z * H_gps.t() * (1/((H_gps * P_z * H_gps.t())(0) + V_gps * R_gpsz * V_gps));
     
+    X = X + K_gpsx * (Y_gpsx - h_X_gpsx);
+    Y = Y + K_gpsy * (Y_gpsy - h_X_gpsy);
+    Z = Z + K_gpsz * (Y_gpsz - h_X_gpsz);
+
+    P_x = P_x - K_gpsx * H_gps * P_x;
+    P_y = P_y - K_gpsy * H_gps * P_y;
+    P_z = P_z - K_gpsz * H_gps * P_z;
     
 }
 
@@ -197,7 +216,7 @@ void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
 
     //correction step 
     cv::Matx21d K_mag;
-    K_mag = P_a * H_mag.t() * 1/((H_mag * P_a * H_mag.t() + V_mag * R_mag * V_mag)(0));
+    K_mag = P_a * H_mag.t() * (1/(((H_mag * P_a * H_mag.t())(0) + V_mag * R_mag * V_mag)));
     X = X + K_mag * (Y_mag - h_X_mag);
     P_a = P_a - K_mag * H_mag * P_a;
 
@@ -279,7 +298,7 @@ void cbSonar(const sensor_msgs::Range::ConstPtr &msg)
 
     //correction step
     cv::Matx21d K_snr;
-    K_snr = P_z * H_snr.t() * 1/((H_snr * P_z * H_snr.t() + V_snr * R_snr * V_snr)(0));
+    K_snr = P_z * H_snr.t() * (1/(((H_snr * P_z * H_snr.t())(0) + V_snr * R_snr * V_snr)));
     Z = Z + K_snr * (Y_snr - h_X_snr);
     P_z = P_z - K_snr * H_snr * P_z;
 }
