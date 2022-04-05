@@ -154,11 +154,12 @@ void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
     
 
     //define 
-    double y_gps = GPS(0);
-    cv::Matx12d h_gps = {1,0};
-    double v_gpps = 1;
-    double r_gps = r_gps_x;
+    double Y_gps = GPS(0);
+    cv::Matx12d H_gps = {1,0};     
+    double V_gps = 1;
+    double R_gps = r_gps_x;
     // correction step
+    
     
 }
 
@@ -176,7 +177,7 @@ void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
     double my = msg->vector.y;
     
     
-    a_mgn = atan2(my,mx);
+    a_mgn = atan2(-my,mx);
     yawlist.push_back(a_mgn);
 
     //calculate varience every 100
@@ -187,10 +188,18 @@ void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
     
     ROS_INFO("magnetometer : %7.3f,%7.3f,%7.3f,%7.3f",msg->vector.x,msg->vector.y,r_mgn_a,a_mgn);
 
-    //correction step 
+    //define
+    double Y_mag = a_mgn;
+    double h_X_mag = A(0);
     cv::Matx12d H_mag = {1,0};
-    double mV = 1;
+    double V_mag = 1;
+    double R_mag = r_mgn_a;
 
+    //correction step 
+    cv::Matx21d K_mag;
+    K_mag = P_a * H_mag.t() * 1/((H_mag * P_a * H_mag.t() + V_mag * R_mag * V_mag)(0));
+    X = X + K_mag * (Y_mag - h_X_mag);
+    P_a = P_a - K_mag * H_mag * P_a;
 
 }
 
@@ -225,10 +234,10 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
     }
 
     // correction step
-    double y_bar = z_bar;
+    double Y_bar = z_bar;
     cv::Matx12d H_bar = {1,0};
-    double v_bar = 1;
-    double r_bar = r_bar_z;
+    double V_bar = 1;
+    double R_bar = r_bar_z;
 }
 
 // --------- Sonar ----------
@@ -260,11 +269,19 @@ void cbSonar(const sensor_msgs::Range::ConstPtr &msg)
     }
 
     r_snr_z_old = r_snr_z;
+    
+    //define
+    double Y_snr = z_snr;
+    double h_X_snr = Z(0);
+    cv::Matx12d H_snr = {1,0};
+    double V_snr = 1;
+    double R_snr = r_snr_z;
+
     //correction step
-    double y_snr = z_snr;
-    cv::Matx12d H_sonar = {1,0};
-    double v_snr = 1;
-    double r_snr = r_snr_z;
+    cv::Matx21d K_snr;
+    K_snr = P_z * H_snr.t() * 1/((H_snr * P_z * H_snr.t() + V_snr * R_snr * V_snr)(0));
+    Z = Z + K_snr * (Y_snr - h_X_snr);
+    P_z = P_z - K_snr * H_snr * P_z;
 }
 
 // --------- GROUND TRUTH ----------
