@@ -13,11 +13,12 @@
 #include <std_srvs/Empty.h>                          // Service to calrbrate motors
 #include <opencv2/core/core.hpp>
 #include "common.hpp"
+#include <fstream>
 
 #define NaN std::numeric_limits<double>::quiet_NaN()
 
 // global parameters to be read from ROS PARAMs
-bool verbose, use_ground_truth, enable_baro, enable_magnet, enable_sonar, enable_gps;
+bool verbose, use_ground_truth, enable_baro, enable_magnet, enable_sonar, enable_gps, tune_covariance;
 
 // others
 bool ready = false; // signal to topics to begin
@@ -128,6 +129,10 @@ void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
     double lat = DEG2RAD*(msg->latitude);
     double lon = DEG2RAD*(msg->longitude);
     double alt = msg->altitude;
+
+    //read covariance 
+    
+
     double e_square = 1 - ((RAD_POLAR*RAD_POLAR)/(RAD_EQUATOR*RAD_EQUATOR));
     double n = RAD_EQUATOR/(sqrt(1-(e_square*sin(lat)*sin(lat))));
     
@@ -203,11 +208,12 @@ void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
     yawlist.push_back(a_mgn);
 
     //calculate varience every 100
-    if(yawlist.size() > 100){
+    if(yawlist.size() >= 100 && tune_covariance){
         r_mgn_a = variance(yawlist);
         yawlist.clear();
     }
-    
+
+
     ROS_INFO("magnetometer : %7.3f,%7.3f,%7.3f,%7.3f",msg->vector.x,msg->vector.y,r_mgn_a,a_mgn);
 
     //define
@@ -238,11 +244,10 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
     z_bar = msg->altitude;
     z_bar_list.push_back(z_bar);
     //calculate varience every 100
-    if (z_bar_list.size() > 100) {
+    if (z_bar_list.size() >= 100 && tune_covariance) {
         r_bar_z = variance(z_bar_list); 
         z_bar_list.clear();
     }
-
     // define
     double Y_bar = z_bar;
     double h_X_bar = Z(0);
@@ -253,6 +258,7 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
     cv::Matx31d K_bar;
     // correction
     K_bar = P_z * H_bar.t() * (1/((H_bar * P_z * H_bar.t())(0) + V_bar * R_bar * V_bar));
+    ROS_WARN("bias: %f, k_BAR: %f %f %f", Z(2), K_bar(0), K_bar(1), K_bar(2));
     Z = Z + K_bar * (Y_bar - h_X_bar - Z(2));
     P_z = P_z - K_bar * H_bar * P_z;
 }
@@ -280,7 +286,7 @@ void cbSonar(const sensor_msgs::Range::ConstPtr &msg)
     }
 
     //calculate varience every 100
-    if (sonar_list.size() > 100) {
+    if (sonar_list.size() >= 100 && tune_covariance) {
         r_snr_z = variance(sonar_list); 
         sonar_list.clear();
     }
@@ -311,6 +317,11 @@ void cbTrue(const nav_msgs::Odometry::ConstPtr &msg)
 // --------- MEASUREMENT UPDATE WITH GROUND TRUTH ----------
 int main(int argc, char **argv)
 {
+    std::ofstream data_file;
+    data_file.open("/home/zccccclin/project_2/data.txt");
+    data_file << "r_gps_x" << "\t" << "r_gps_y" << "\t" << "r_gps_z" << "\t" << "r_mgn_a" << "\t" << "r_bar_z" << "\t" << "r_snr_z" << std::endl;
+
+
     ros::init(argc, argv, "hector_motion");
     ros::NodeHandle nh;
 
@@ -357,6 +368,8 @@ int main(int argc, char **argv)
         ROS_WARN("HMOTION: Param enable_sonar not found, set to true");
     if (!nh.param("enable_gps", enable_gps, true))
         ROS_WARN("HMOTION: Param enable_gps not found, set to true");
+    if (!nh.param("tune_covariance", tune_covariance, false))
+        ROS_WARN("HMOTION: Param tune_covariance not found, set to false");
 
     // --------- Subscribers ----------
     ros::Subscriber sub_true = nh.subscribe<nav_msgs::Odometry>("ground_truth/state", 1, &cbTrue);
@@ -425,8 +438,10 @@ int main(int argc, char **argv)
             ROS_INFO("[HM]   GPS(%7.3lf,%7.3lf,%7.3lf, ---- )", GPS(0), GPS(1), GPS(2));
             ROS_INFO("[HM] MAGNT( ----- , ----- , ----- ,%6.3lf)", a_mgn);
             ROS_INFO("[HM]  BARO( ----- , ----- ,%7.3lf, ---- )", z_bar);
-            ROS_INFO("[HM] BAROB( ----- , ----- ,%7.3lf, ---- )", Z(3));
+            ROS_INFO("[HM] BAROC( ----- , ----- ,%7.3lf, ---- )", z_bar - Z(2));
+            ROS_INFO("[HM] BAROB( ----- , ----- ,%7.3lf, ---- )", Z(2));
             ROS_INFO("[HM] SONAR( ----- , ----- ,%7.3lf, ---- )", z_snr);
+            data_file << r_gps_x << "\t" << r_gps_y << "\t" << r_gps_z << "\t" << r_mgn_a << "\t" << r_bar_z << "\t" << r_snr_z << std::endl;
         }
 
         //  Publish pose and vel
@@ -461,5 +476,6 @@ int main(int argc, char **argv)
     }
 
     ROS_INFO("HMOTION: ===== END =====");
+    data_file.close();
     return 0;
 }
