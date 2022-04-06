@@ -147,13 +147,15 @@ int main(int argc, char **argv)
     double prev_time = ros::Time::now().toSec();
 
     // Setup Variables
-    cv::Matx31d XYZ;
-    cv::Matx31d LOCAL_NED_XYZ;
+    cv::Matx31d WORLD_FRAME_XYZ;
+    cv::Matx31d SRC_NED_XYZ;
     cv::Matx31d TARGET_NED_XYZ;
     cv::Matx33d R = {
         1, 0, 0,
         0, -1, 0,
         0, 0, -1};
+    
+    double BODY_FRAME_YAW = 0;
 
     double error_lin_z;
     double error_lin_z_prev = 0;
@@ -184,6 +186,16 @@ int main(int argc, char **argv)
     double U_lin_y = 0;
     double lin_acc_y;
     double cmd_lin_vel_y_prev = 0;
+
+    double error_ang_z;
+    double error_ang_z_prev = 0;
+    double error_ang_z_sum = 0;
+    double P_ang_z = 0;
+    double I_ang_z = 0;
+    double D_ang_z = 0;
+    double U_ang_z = 0;
+    double ang_acc_z;
+    double cmd_ang_vel_z_prev = 0;
     
 
     // double cmd_lin_vel = 0, cmd_ang_vel = 0;
@@ -208,7 +220,7 @@ int main(int argc, char **argv)
     // double ang_acc;
     // double cmd_ang_vel_prev =0;
 
-    // int cnt =0;
+    // int cnt = 0;
 
     // main loop
     while (ros::ok() && nh.param("run", true))
@@ -222,18 +234,24 @@ int main(int argc, char **argv)
         prev_time += dt;
 
         ////////////////// MOTION CONTROLLER HERE //////////////////
-        ROS_INFO("TARGET_Z %f", target_z);
-        ROS_INFO("z%f", z);
-        XYZ = {x, y, z};
-        LOCAL_NED_XYZ = R * XYZ;
+        // Convert coords for source and target from world frame to NED 
+        WORLD_FRAME_XYZ = {x, y, z};
+        SRC_NED_XYZ = R * WORLD_FRAME_XYZ;
         TARGET_NED_XYZ = R * cv::Matx31d({target_x, target_y, target_z});
-        ROS_INFO_STREAM("LOCAL_NED_XYZ " << LOCAL_NED_XYZ);
-        ROS_INFO_STREAM("TARGET_NED_XYZ" << TARGET_NED_XYZ);
+        ROS_INFO_STREAM("[COORDS]" <<"WORLD_FRAME_XYZ" << WORLD_FRAME_XYZ << " SRC_NED_XYZ " << SRC_NED_XYZ << " TARGET_NED_XYZ" << TARGET_NED_XYZ);
+        BODY_FRAME_YAW = -a;
 
-        error_lin_z = LOCAL_NED_XYZ(0, 2) - TARGET_NED_XYZ(0, 2); // Z_Local - Z_Target
+        // Calculate errors from
+        error_lin_x = cos(-a) * (target_x - x) - sin(-a) * (target_y - y);
+        error_lin_y = sin(-a) * (target_x - x) + cos(-a) * (target_y - y);
+        error_lin_z = target_z - z;
+        // pos_error = dist_euc(x, y, target_x, target_y);
+
+
+        // LIN_Z
         error_lin_z_sum += error_lin_z * dt;
         P_lin_z = Kp_z * error_lin_z;
-        I_lin_z = I_lin_z + (Ki_z * error_lin_z);
+        I_lin_z = I_lin_z + (Ki_lin * error_lin_z);
         D_lin_z = Kd_z * ((error_lin_z - error_lin_z_prev) / dt);
         U_lin_z = P_lin_z + I_lin_z + D_lin_z;
         error_lin_z_prev = error_lin_z;
@@ -242,7 +260,7 @@ int main(int argc, char **argv)
         cmd_lin_vel_z_prev = cmd_lin_vel_z;
         cmd_lin_vel_z = sat((U_lin_z + lin_acc_z * dt), max_z_vel);
 
-
+        // LIN_X
         error_lin_x_sum += error_lin_x * dt;
         P_lin_x = Kp_lin * error_lin_x;
         I_lin_x = I_lin_x + (Ki_lin * error_lin_x);
@@ -254,6 +272,9 @@ int main(int argc, char **argv)
         cmd_lin_vel_x_prev = cmd_lin_vel_x;
         cmd_lin_vel_x = sat((U_lin_x + lin_acc_x * dt), max_lin_vel);
 
+        ROS_INFO_STREAM("LIN_X_ERROR" << error_lin_x << " P_lin_x" << P_lin_x << " I_lin_x" << I_lin_x << " D_lin_x" << D_lin_x);
+
+        // LIN_Y
         error_lin_y_sum += error_lin_y * dt;
         P_lin_y = Kp_lin * error_lin_y;
         I_lin_y = I_lin_y + (Ki_lin * error_lin_y);
@@ -265,7 +286,21 @@ int main(int argc, char **argv)
         cmd_lin_vel_y_prev = cmd_lin_vel_y;
         cmd_lin_vel_y = sat((U_lin_y + lin_acc_y * dt), max_lin_vel);
 
+        ROS_INFO_STREAM("LIN_Y_ERROR" << error_lin_y);
 
+        // ANG_Z
+        // TODO: Check if the angle a is correct
+        error_ang_z = limit_angle(heading(SRC_NED_XYZ(0,0),SRC_NED_XYZ(0,1),TARGET_NED_XYZ(0,0), TARGET_NED_XYZ(0,1)) - BODY_FRAME_YAW);
+        error_ang_z_sum += error_ang_z * dt;
+        P_ang_z = Kp_z * error_ang_z;
+        I_ang_z = I_ang_z + Ki_z*a;
+        D_ang_z = Kd_z*((BODY_FRAME_YAW - error_ang_z_prev)/dt);
+        U_ang_z = P_ang_z + I_ang_z + D_ang_z;
+        error_ang_z_prev = error_ang_z;
+
+        ang_acc_z = (U_ang_z - cmd_ang_vel_z_prev) / dt;
+        cmd_ang_vel_z_prev = cmd_lin_vel_a;
+        cmd_lin_vel_a = sat((U_ang_z + ang_acc_z * dt), max_z_vel);
 
         // publish speeds
         msg_cmd.linear.x = cmd_lin_vel_x;

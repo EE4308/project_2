@@ -154,6 +154,7 @@ int main(int argc, char **argv)
     ROS_INFO(" HMAIN : ===== BEGIN =====");
     HectorState state = TAKEOFF;
     ros::Rate rate(main_iter_rate);
+    msg_traj.poses.push_back(geometry_msgs::PoseStamped()); // insert a posestamped initialised to all 0
     while (ros::ok() && nh.param("run", true))
     {
         // get topics
@@ -162,51 +163,73 @@ int main(int argc, char **argv)
         //// IMPLEMENT ////
         if (state == TAKEOFF)
         {
-
-            if (z >= height) {
+            //Update traj towards current_pos.z = height
+            //If reach height, then update state to START
+            if (std::abs(z - height) < close_enough) {
                 state = START;
+                msg_rotate.data = true;
+                pub_rotate.publish(msg_rotate);
+                ROS_INFO_STREAM("[TAKEOFF] Takeoff Completed");
             } else {
                 // Disable Rotate
                 msg_rotate.data = false;
                 pub_rotate.publish(msg_rotate);
+
+                // Point at height above start point
                 msg_target.point.x = x;
                 msg_target.point.y = y;
                 msg_target.point.z = height;
+                ROS_INFO_STREAM("[TAKEOFF] Started Takeoff");
             }
-            //Update traj towards current_pos.z = height
-            //If reach height, then update state to START
         }
         else if (state == TURTLE)
         {
-            //Update traj towards Final GOAL
+            //Update towards Final GOAL
             //If reach final goal, update state to goal
-            
+            msg_target.point.x = goal_x;
+            msg_target.point.y = goal_y;
+            if (dist_euc(x,y,goal_x,goal_y) < close_enough){
+                state = GOAL;
+            }
         }
         else if (state == START)
         {
-            // Update traj towards turtle
-            // If reach turtle, update state to turtle
-
-
             if (!nh.param("/turtle/run", false))
             { // when the turtle reaches the final goal
                 state = LAND;
             }
+
+            // Update traj towards current turtle pos
+            msg_target.point.x = turtle_x;
+            msg_target.point.y = turtle_y;
+
+            if (dist_euc(x,y,turtle_x, turtle_y) < close_enough){
+                state = TURTLE;
+            }
         }
         else if (state == GOAL)
         {
-
             // Update traj towards START, if reach start, update state to start
+            if (dist_euc(x,y, initial_x, initial_y) < close_enough){
+                state = START;
+            }
+            msg_target.point.x = initial_x;
+            msg_target.point.y = initial_y;
             
         }
         else if (state == LAND)
         {
-            
+            msg_rotate.data = true;
+            pub_rotate.publish(msg_rotate);
+            msg_target.point.z = 0.0;
+            msg_target.point.x = initial_x;
+            msg_target.point.y = initial_y;
         }
         
         
         // Publish target
         pub_target.publish(msg_target);
+        pub_traj.publish(msg_traj);
 
         if (verbose)
             ROS_INFO_STREAM(" HMAIN : " << to_string(state));
