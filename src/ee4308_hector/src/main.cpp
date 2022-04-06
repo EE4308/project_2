@@ -11,6 +11,7 @@
 #include <std_msgs/Bool.h>
 #include <opencv2/core/core.hpp>
 #include "common.hpp"
+#include <trajectory.hpp>
 #define NaN std::numeric_limits<double>::quiet_NaN()
 
 enum HectorState
@@ -155,6 +156,7 @@ int main(int argc, char **argv)
     HectorState state = TAKEOFF;
     ros::Rate rate(main_iter_rate);
     msg_traj.poses.push_back(geometry_msgs::PoseStamped()); // insert a posestamped initialised to all 0
+    std::vector<Position> trajectory;
     while (ros::ok() && nh.param("run", true))
     {
         // get topics
@@ -185,50 +187,66 @@ int main(int argc, char **argv)
         else if (state == TURTLE)
         {
             //Update towards Final GOAL
-            //If reach final goal, update state to goal
-            msg_target.point.x = goal_x;
-            msg_target.point.y = goal_y;
+            // trajectory = generate_trajectory(x,y, goal_x, goal_y, 0.5, 0.04, look_ahead);
+            trajectory = generate_full_trajectory(x,y,goal_x, goal_y, initial_x, initial_y, look_ahead);
             if (dist_euc(x,y,goal_x,goal_y) < close_enough){
                 state = GOAL;
+                ROS_INFO_STREAM("[GOAL] Entered GOAL state");
             }
         }
         else if (state == START)
         {
-            if (!nh.param("/turtle/run", false))
-            { // when the turtle reaches the final goal
-                state = LAND;
-            }
-
-            // Update traj towards current turtle pos
-            msg_target.point.x = turtle_x;
-            msg_target.point.y = turtle_y;
+            // Update trajectory towards turtle pos
+            // trajectory = generate_trajectory(x,y,turtle_x, turtle_y,0.5, 0.04, look_ahead);
+            trajectory = generate_full_trajectory(x,y,turtle_x, turtle_y, goal_x, goal_y, look_ahead);
 
             if (dist_euc(x,y,turtle_x, turtle_y) < close_enough){
                 state = TURTLE;
+                ROS_INFO_STREAM("[TURTLE] Entered TURTLE state");
+            }
+
+            if (!nh.param("/turtle/run", false))
+            { // when the turtle reaches the final goal
+                trajectory.clear();
+                state = LAND;
             }
         }
         else if (state == GOAL)
         {
+            // trajectory = generate_trajectory(x,y,initial_x,initial_y, 0.5, 0.04, look_ahead);
+            trajectory = generate_full_trajectory(x,y,initial_x,initial_y,NULL,NULL,look_ahead);
             // Update traj towards START, if reach start, update state to start
             if (dist_euc(x,y, initial_x, initial_y) < close_enough){
                 state = START;
-            }
-            msg_target.point.x = initial_x;
-            msg_target.point.y = initial_y;
-            
+                ROS_INFO_STREAM("[START] Entered START state");
+
+            }           
         }
         else if (state == LAND)
         {
-            msg_rotate.data = true;
+            msg_rotate.data = false;
             pub_rotate.publish(msg_rotate);
             msg_target.point.z = 0.0;
             msg_target.point.x = initial_x;
             msg_target.point.y = initial_y;
         }
         
-        
         // Publish target
+        if (trajectory.size() > 0) {
+            msg_target.point.x = trajectory.at(1).x;
+            msg_target.point.y = trajectory.at(1).y;
+            msg_target.point.z = height;
+        }
         pub_target.publish(msg_target);
+
+        msg_traj.poses.clear();
+        for (Position &pos : trajectory)
+        {
+            msg_traj.poses.push_back(geometry_msgs::PoseStamped()); // insert a posestamped initialised to all 0
+            msg_traj.poses.back().pose.position.x = pos.x;
+            msg_traj.poses.back().pose.position.y = pos.y;
+            msg_traj.poses.back().pose.position.z = height;
+                    }
         pub_traj.publish(msg_traj);
 
         if (verbose)
