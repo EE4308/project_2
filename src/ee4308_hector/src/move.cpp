@@ -300,7 +300,7 @@ int main(int argc, char **argv)
 
         ang_acc_z = (U_ang_z - cmd_ang_vel_z_prev) / dt;
         cmd_ang_vel_z_prev = cmd_lin_vel_a;
-        cmd_lin_vel_a = sat((U_ang_z + ang_acc_z * dt), max_z_vel);
+        cmd_lin_vel_a = yaw_rate;
 
         // publish speeds
         msg_cmd.linear.x = cmd_lin_vel_x;

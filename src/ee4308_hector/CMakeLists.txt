@@ -38,7 +38,8 @@ include_directories(
 add_executable(
   hector_main
     src/common.cpp
-    src/main.cpp)
+    src/main.cpp
+    src/trajectory.cpp)
 target_link_libraries(hector_main ${catkin_LIBRARIES} ${OpenCV_LIBS})
 
 add_executable(
