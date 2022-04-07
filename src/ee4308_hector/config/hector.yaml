@@ -14,15 +14,15 @@ qx: 1
 qy: 1
 qz: 1
 enable_gps: true
-r_gps_x: 25
-r_gps_y: 25
-r_gps_z: 25
+r_gps_x: 2
+r_gps_y: 2
+r_gps_z: 2
 enable_magnet: true
-r_mgn_a: 0.000706454
+r_mgn_a: 0.2
 enable_baro: true
-r_bar_z: 0.0136993
+r_bar_z: 0.2
 enable_sonar: true
-r_snr_z: 2.20701e-05
+r_snr_z: 2
 motion_iter_rate: 20
 tune_covariance: false
 
