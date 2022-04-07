@@ -67,8 +67,8 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
     // y
     cv::Matx22d Fy_mat = {1, imu_dt,
                           0, 1};
-    cv::Matx22d Wy_mat = {(-0.5)*pow(imu_dt,2)*sin(A(0)), (-0.5)*pow(imu_dt,2)*cos(A(0)),
-                          -imu_dt*sin(A(0)), -imu_dt*cos(A(0))};
+    cv::Matx22d Wy_mat = {(-0.5)*pow(imu_dt,2)*cos(A(0)), (-0.5)*pow(imu_dt,2)*sin(A(0)),
+                          -imu_dt*cos(A(0)), -imu_dt*sin(A(0))};
     cv::Matx22d Qy_mat = {qy, 0,
                           0, qx};
     
@@ -83,20 +83,8 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
     cv::Matx21d Wa_mat = {imu_dt, 1};
     
     cv::Matx21d Ux_mat = {ux, uy};
-    cv::Matx21d Uy_mat = {ux, uy};
+    cv::Matx21d Uy_mat = {uy, ux};
     double Uz = uz - G;
-
-    // previous variable reference
-    /* 
-    cv::Matx21d prev_X = X;
-    cv::Matx21d prev_Y = Y;
-    cv::Matx21d prev_Z = Z;
-    cv::Matx21d prev_A = A;
-    cv::Matx22d prev_Px = P_x;
-    cv::Matx22d prev_Py = P_y;
-    cv::Matx22d prev_Pz = P_z;
-    cv::Matx22d prev_Pa = P_a;
-    */ 
 
     // estimate
     X = Fx_mat * X + Wx_mat * Ux_mat;
@@ -107,7 +95,6 @@ void cbImu(const sensor_msgs::Imu::ConstPtr &msg)
     P_z = Fz_mat * P_z * Fz_mat.t() + Wz_mat * qz * Wz_mat.t();
     A = Fa_mat * A + Wa_mat * ua;
     P_a = Fa_mat* P_a * Fa_mat.t() + Wa_mat * qa * Wa_mat.t();
-    ROS_INFO("ux: %.3f, uy: %.3f, uz: %.3f, ua: %.3f", ux, uy, uz, ua);
 }
 
 // --------- GPS ----------
@@ -119,6 +106,16 @@ const double DEG2RAD = M_PI / 180;
 const double RAD_POLAR = 6356752.3;
 const double RAD_EQUATOR = 6378137;
 double r_gps_x, r_gps_y, r_gps_z;
+double e_square, n, x_e, y_e, z_e;
+cv::Matx33d R_en;
+cv::Matx33d R_mn = {1,0,0,0,-1,0,0,0,-1};
+cv::Matx31d NED = {NaN, NaN, NaN};
+cv::Matx31d ECEF = {NaN, NaN, NaN};
+double Y_gpsx, Y_gpsy, Y_gpsz, h_X_gpsx, h_X_gpsy, h_X_gpsz, V_gps;
+cv::Matx12d H_gps;
+cv::Matx13d H_gpsz;
+cv::Matx21d K_gpsx, K_gpsy;
+cv::Matx31d K_gpsz;
 void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
 {
     if (!ready)
@@ -131,21 +128,19 @@ void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
     double alt = msg->altitude;
 
     //read covariance 
-    
+    //covariance was read through rostopic
 
-    double e_square = 1 - ((RAD_POLAR*RAD_POLAR)/(RAD_EQUATOR*RAD_EQUATOR));
-    double n = RAD_EQUATOR/(sqrt(1-(e_square*sin(lat)*sin(lat))));
+    e_square = 1 - ((RAD_POLAR*RAD_POLAR)/(RAD_EQUATOR*RAD_EQUATOR));
+    n = RAD_EQUATOR/(sqrt(1-(e_square*sin(lat)*sin(lat))));
     
-    double x_e = (n+alt)*cos(lat)*cos(lon);
-    double y_e = (n+alt)*cos(lat)*sin(lon);
-    double z_e = ((n*((RAD_POLAR*RAD_POLAR)/(RAD_EQUATOR*RAD_EQUATOR)))+alt)*sin(lat);
-    cv::Matx33d R_en = {-sin(lat)*cos(lon), -sin(lon), -cos(lat)*cos(lon),-sin(lat)*cos(lon),cos(lon),-cos(lat)*sin(lon),cos(lat),0,-sin(lon)};
-    cv::Matx31d ned_coordinate = {NaN, NaN, NaN};
-    cv::Matx31d ECEF = {x_e, y_e, z_e};
-    ned_coordinate = (R_en.t())*(ECEF-initial_ECEF);
-    cv::Matx33d R_mn = {1,0,0,0,-1,0,0,0,-1};
-    GPS = R_mn*ned_coordinate + initial_pos;
-
+    x_e = (n+alt)*cos(lat)*cos(lon);
+    y_e = (n+alt)*cos(lat)*sin(lon);
+    z_e = ((n*((RAD_POLAR*RAD_POLAR)/(RAD_EQUATOR*RAD_EQUATOR)))+alt)*sin(lat);
+    
+    R_en = {-sin(lat)*cos(lon), -sin(lon), -cos(lat)*cos(lon),
+            -sin(lat)*sin(lon),  cos(lon), -cos(lat)*sin(lon),
+             cos(lat),            0,       -sin(lon)};
+    ECEF = {x_e, y_e, z_e};
 
     // for initial message -- you may need this:
     if (std::isnan(initial_ECEF(0)))
@@ -153,40 +148,37 @@ void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
         initial_ECEF = ECEF;
         return;
     }
-    initial_ECEF = ECEF;
-    ROS_INFO("ned_coordinate : %7.3f,%7.3f,%7.3f",ned_coordinate(0),ned_coordinate(1),ned_coordinate(2));
-    
+
+    NED = (R_en.t())*(ECEF-initial_ECEF);
+    GPS = R_mn*NED + initial_pos;
+
+    ROS_INFO("ned_coordinate : %7.3f,%7.3f,%7.3f",NED(0),NED(1),NED(2));
     ROS_INFO("ECEF : %7.3f,%7.3f,%7.3f",ECEF(0),ECEF(1),ECEF(2));
     
 
     //define 
-    double Y_gpsx = GPS(0);
-    double Y_gpsy = GPS(1);
-    double Y_gpsz = GPS(2);
-    double h_X_gpsx = X(0);
-    double h_X_gpsy = Y(0);
-    double h_X_gpsz = Z(0);
-    cv::Matx12d H_gps = {1,0};
-    cv::Matx13d H_gpsz = {1, 0, 0};     
-    double V_gps = 1;
-    double R_gpsx = r_gps_x;
-    double R_gpsy = r_gps_y;
-    double R_gpsz = r_gps_z;
+    Y_gpsx = GPS(0);
+    Y_gpsy = GPS(1);
+    Y_gpsz = GPS(2);
+    h_X_gpsx = X(0);
+    h_X_gpsy = Y(0);
+    h_X_gpsz = Z(0);
+    H_gps = {1,0};
+    H_gpsz = {1, 0, 0};     
+    V_gps = 1;
 
-    cv::Matx21d K_gpsx, K_gpsy;
-    cv::Matx31d K_gpsz;
     // correction step
-    K_gpsx = P_x * H_gps.t() * (1/((H_gps * P_x * H_gps.t())(0) + V_gps * R_gpsx * V_gps));
-    K_gpsy = P_y * H_gps.t() * (1/((H_gps * P_y * H_gps.t())(0) + V_gps * R_gpsy * V_gps));
-    K_gpsz = P_z * H_gpsz.t() * (1/((H_gpsz * P_z * H_gpsz.t())(0) + V_gps * R_gpsz * V_gps));
+    K_gpsx = P_x * H_gps.t() * (1/((H_gps * P_x * H_gps.t())(0) + V_gps * r_gps_x * V_gps));
+    K_gpsy = P_y * H_gps.t() * (1/((H_gps * P_y * H_gps.t())(0) + V_gps * r_gps_y * V_gps));
+    K_gpsz = P_z * H_gpsz.t() * (1/((H_gpsz * P_z * H_gpsz.t())(0) + V_gps * r_gps_z * V_gps));
     
     X = X + K_gpsx * (Y_gpsx - h_X_gpsx);
     Y = Y + K_gpsy * (Y_gpsy - h_X_gpsy);
     Z = Z + K_gpsz * (Y_gpsz - h_X_gpsz);
 
-    P_x = P_x - K_gpsx * H_gps * P_x;
-    P_y = P_y - K_gpsy * H_gps * P_y;
-    P_z = P_z - K_gpsz * H_gpsz * P_z;
+    P_x = P_x - (K_gpsx * H_gps * P_x);
+    P_y = P_y - (K_gpsy * H_gps * P_y);
+    P_z = P_z - (K_gpsz * H_gpsz * P_z);
     
 }
 
@@ -205,14 +197,14 @@ void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
     
     
     a_mgn = atan2(-my,mx);
+    
+    //Variance calculation
     yawlist.push_back(a_mgn);
-
     //calculate varience every 100
     if(yawlist.size() >= 100 && tune_covariance){
         r_mgn_a = variance(yawlist);
         yawlist.clear();
     }
-
 
     ROS_INFO("magnetometer : %7.3f,%7.3f,%7.3f,%7.3f",msg->vector.x,msg->vector.y,r_mgn_a,a_mgn);
 
@@ -226,7 +218,7 @@ void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
     //correction step 
     cv::Matx21d K_mag;
     K_mag = P_a * H_mag.t() * (1/(((H_mag * P_a * H_mag.t())(0) + V_mag * R_mag * V_mag)));
-    X = X + K_mag * (Y_mag - h_X_mag);
+    A = A + K_mag * (Y_mag - h_X_mag);
     P_a = P_a - K_mag * H_mag * P_a;
 
 }
