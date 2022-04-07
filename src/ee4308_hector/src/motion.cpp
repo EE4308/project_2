@@ -137,7 +137,9 @@ void cbGps(const sensor_msgs::NavSatFix::ConstPtr &msg)
     y_e = (n+alt)*cos(lat)*sin(lon);
     z_e = ((n*((RAD_POLAR*RAD_POLAR)/(RAD_EQUATOR*RAD_EQUATOR)))+alt)*sin(lat);
     
-    R_en = {-sin(lat)*cos(lon), -sin(lon), -cos(lat)*cos(lon),-sin(lat)*cos(lon),cos(lon),-cos(lat)*sin(lon),cos(lat),0,-sin(lon)};
+    R_en = {-sin(lat)*cos(lon), -sin(lon), -cos(lat)*cos(lon),
+            -sin(lat)*sin(lon),  cos(lon), -cos(lat)*sin(lon),
+             cos(lat),            0,       -sin(lon)};
     ECEF = {x_e, y_e, z_e};
 
     // for initial message -- you may need this:
