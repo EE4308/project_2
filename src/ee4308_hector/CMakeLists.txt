@@ -15,6 +15,8 @@ find_package(catkin REQUIRED COMPONENTS
 )
 find_package(OpenCV REQUIRED)
 
+find_package(Eigen3 REQUIRED)
+
 catkin_package(
   CATKIN_DEPENDS 
     message_runtime 
@@ -33,6 +35,7 @@ catkin_package(
 include_directories(
   include/${PROJECT_NAME}
   ${catkin_INCLUDE_DIRS}
+  ${EIGEN3_INCLUDE_DIRS}
 )
 
 add_executable(
@@ -40,7 +43,7 @@ add_executable(
     src/common.cpp
     src/main.cpp
     src/trajectory.cpp)
-target_link_libraries(hector_main ${catkin_LIBRARIES} ${OpenCV_LIBS})
+target_link_libraries(hector_main ${catkin_LIBRARIES} ${OpenCV_LIBS} armadillo)
 
 add_executable(
   hector_move
