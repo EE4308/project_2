@@ -456,14 +456,10 @@ int main(int argc, char **argv)
             ROS_INFO("[HM] BAROC( ----- , ----- ,%7.3lf, ---- )", z_bar - Z(2));
             ROS_INFO("[HM] BAROB( ----- , ----- ,%7.3lf, ---- )", Z(2));
             ROS_INFO("[HM] SONAR( ----- , ----- ,%7.3lf, ---- )", z_snr);
-<<<<<<< HEAD
             if (tune_covariance){
                 data_file << r_gps_x << "\t" << r_gps_y << "\t" << r_gps_z << "\t" << r_mgn_a << "\t" << r_bar_z << "\t" << r_snr_z << std::endl;
             }
-=======
-            data_file << r_gps_x << "\t" << r_gps_y << "\t" << r_gps_z << "\t" << r_mgn_a << "\t" << r_bar_z << "\t" << r_snr_z << std::endl;
             iter ++;
->>>>>>> 74a13b5802a055727ed633df135334051b8c196e
         }
 
         //  Publish pose and vel
