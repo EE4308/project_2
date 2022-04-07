@@ -198,6 +198,7 @@ int main(int argc, char **argv)
         {
             // Update trajectory towards turtle pos
             // trajectory = generate_trajectory(x,y,turtle_x, turtle_y,0.5, 0.04, look_ahead);
+            ROS_INFO_STREAM("We are in START");
             trajectory = generate_full_trajectory(x,y,turtle_x, turtle_y, goal_x, goal_y, look_ahead);
 
             if (dist_euc(x,y,turtle_x, turtle_y) < close_enough){
@@ -231,10 +232,10 @@ int main(int argc, char **argv)
             msg_target.point.y = initial_y;
         }
         
-        // Publish target
+        //Publish target
         if (trajectory.size() > 0) {
-            msg_target.point.x = trajectory.at(1).x;
-            msg_target.point.y = trajectory.at(1).y;
+            msg_target.point.x = trajectory.at(10).x;
+            msg_target.point.y = trajectory.at(10).y;
             msg_target.point.z = height;
         }
         pub_target.publish(msg_target);
