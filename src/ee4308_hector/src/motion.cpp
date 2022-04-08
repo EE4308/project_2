@@ -258,7 +258,7 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
 // --------- Sonar ----------
 double z_snr = NaN;
 double r_snr_z;
-double r_snr_z_old;
+double z_snr_old;
 std::vector<double> sonar_list;
 void cbSonar(const sensor_msgs::Range::ConstPtr &msg)
 {
@@ -267,23 +267,29 @@ void cbSonar(const sensor_msgs::Range::ConstPtr &msg)
 
     //// IMPLEMENT SONAR ////
     z_snr = msg->range;
+    // if(abs(z_snr- z_snr_old) >= 0.2)
+    // {
+    //     z_snr = z_snr_old;
+    // }
+
+
+    z_snr = 0.95*mean(sonar_list) + 0.05*z_snr;
     sonar_list.push_back(z_snr);
 
-
+    
     //check if the value is changing more than min height
     //height is 2m lowest for obstacle
-    if (abs(r_snr_z- r_snr_z_old) >=0.2)
-    {
-        r_snr_z = r_snr_z_old;
-    }
+   
 
     //calculate varience every 100
     if (sonar_list.size() >= 100 && tune_covariance) {
         r_snr_z = variance(sonar_list); 
+        
         sonar_list.clear();
     }
-
-    r_snr_z_old = r_snr_z;
+    ROS_WARN(" varience_sonar: %f ",  r_snr_z);
+    ROS_WARN(" mean_sonar: %f ",  mean(sonar_list));
+    z_snr_old = z_snr;
     
     //define
     double Y_snr = z_snr;
