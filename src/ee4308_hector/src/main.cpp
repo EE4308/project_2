@@ -163,83 +163,100 @@ int main(int argc, char **argv)
         ros::spinOnce();
 
         //// IMPLEMENT ////
-        if (state == TAKEOFF)
-        {
-            //Update traj towards current_pos.z = height
-            //If reach height, then update state to START
-            if (std::abs(z - height) < close_enough) {
-                state = START;
-                msg_rotate.data = true;
-                pub_rotate.publish(msg_rotate);
-                ROS_INFO_STREAM("[TAKEOFF] Takeoff Completed");
-            } else {
-                // Disable Rotate
+        switch (state) {
+        case TAKEOFF:
+            {
+                // Update target towards takeoff height
+                if (std::abs(z - height) < close_enough)
+                {
+                    ROS_INFO_STREAM("[TAKEOFF] Takeoff Completed");
+                    state = START;
+                    msg_rotate.data = true;
+                    pub_rotate.publish(msg_rotate);
+                }
+                else
+                {
+                    // Disable Rotate
+                    msg_rotate.data = false;
+                    pub_rotate.publish(msg_rotate);
+
+                    // Point at height above start point
+                    msg_target.point.x = x;
+                    msg_target.point.y = y;
+                    msg_target.point.z = height;
+                    ROS_INFO_STREAM("[TAKEOFF] Started Takeoff");
+                }
+                break;
+            }
+        case TURTLE:
+            {
+                // Update trajectory towards final GOAL
+                trajectory = generate_full_trajectory(x, y, goal_x, goal_y, initial_x, initial_y);
+                if (dist_euc(x, y, goal_x, goal_y) < close_enough)
+                {
+                    state = GOAL;
+                    ROS_INFO_STREAM("[GOAL] Entered GOAL state");
+                }
+                break;
+            }
+        case START:
+            {
+                // Update trajectory towards turtle pos
+                trajectory = generate_full_trajectory(x, y, turtle_x, turtle_y, goal_x, goal_y);
+                if (dist_euc(x, y, turtle_x, turtle_y) < close_enough)
+                {
+                    state = TURTLE;
+                    ROS_INFO_STREAM("[TURTLE] Entered TURTLE state");
+                }
+
+                if (!nh.param("/turtle/run", false))
+                { // when the turtle reaches the final goal
+                    trajectory.clear();
+                    state = LAND;
+                }
+                break;
+            }
+        case GOAL:
+            {
+                // Update traj towards START, if reach start, update state to start
+                trajectory = generate_full_trajectory(x, y, initial_x, initial_y, turtle_x, turtle_y);
+                if (dist_euc(x, y, initial_x, initial_y) < close_enough)
+                {
+                    state = START;
+                    ROS_INFO_STREAM("[START] Entered START state");
+                }
+                break;
+            }
+        case LAND:
+            {
                 msg_rotate.data = false;
                 pub_rotate.publish(msg_rotate);
-
-                // Point at height above start point
-                msg_target.point.x = x;
-                msg_target.point.y = y;
-                msg_target.point.z = height;
-                ROS_INFO_STREAM("[TAKEOFF] Started Takeoff");
+                msg_target.point.z = 0.0;
+                msg_target.point.x = initial_x;
+                msg_target.point.y = initial_y;
+                break;
             }
+        default:
+            ROS_WARN_STREAM("[ERROR] FSM state is not defined"); 
+            break;
         }
-        else if (state == TURTLE)
-        {
-            //Update towards Final GOAL
-            // trajectory = generate_trajectory(x,y, goal_x, goal_y, 0.5, 0.04, look_ahead);
-            trajectory = generate_full_trajectory(x,y,goal_x, goal_y, initial_x, initial_y, look_ahead);
-            if (dist_euc(x,y,goal_x,goal_y) < close_enough){
-                state = GOAL;
-                ROS_INFO_STREAM("[GOAL] Entered GOAL state");
-            }
-        }
-        else if (state == START)
-        {
-            // Update trajectory towards turtle pos
-            // trajectory = generate_trajectory(x,y,turtle_x, turtle_y,0.5, 0.04, look_ahead);
-            ROS_INFO_STREAM("We are in START");
-            trajectory = generate_full_trajectory(x,y,turtle_x, turtle_y, goal_x, goal_y, look_ahead);
 
-            if (dist_euc(x,y,turtle_x, turtle_y) < close_enough){
-                state = TURTLE;
-                ROS_INFO_STREAM("[TURTLE] Entered TURTLE state");
-            }
-
-            if (!nh.param("/turtle/run", false))
-            { // when the turtle reaches the final goal
-                trajectory.clear();
-                state = LAND;
-            }
-        }
-        else if (state == GOAL)
+        // Publish target
+        if (trajectory.size() > 0)
         {
-            // trajectory = generate_trajectory(x,y,initial_x,initial_y, 0.5, 0.04, look_ahead);
-            trajectory = generate_full_trajectory(x,y,initial_x,initial_y,NULL,NULL,look_ahead);
-            // Update traj towards START, if reach start, update state to start
-            if (dist_euc(x,y, initial_x, initial_y) < close_enough){
-                state = START;
-                ROS_INFO_STREAM("[START] Entered START state");
-
-            }           
-        }
-        else if (state == LAND)
-        {
-            msg_rotate.data = false;
-            pub_rotate.publish(msg_rotate);
-            msg_target.point.z = 0.0;
-            msg_target.point.x = initial_x;
-            msg_target.point.y = initial_y;
-        }
-        
-        //Publish target
-        if (trajectory.size() > 0) {
-            msg_target.point.x = trajectory.at(10).x;
-            msg_target.point.y = trajectory.at(10).y;
+            //If trajectory is larger than look_ahead distance
+            if (trajectory.size() > look_ahead + 1) {
+                msg_target.point.x = trajectory.at(look_ahead).x;
+                msg_target.point.y = trajectory.at(look_ahead).y;   
+            } else {
+                msg_target.point.x = trajectory.at(trajectory.size() -1).x;
+                msg_target.point.y = trajectory.at(trajectory.size() -1).y;
+            }
             msg_target.point.z = height;
         }
         pub_target.publish(msg_target);
 
+        // Publish Trajectory
         msg_traj.poses.clear();
         for (Position &pos : trajectory)
         {
@@ -247,7 +264,7 @@ int main(int argc, char **argv)
             msg_traj.poses.back().pose.position.x = pos.x;
             msg_traj.poses.back().pose.position.y = pos.y;
             msg_traj.poses.back().pose.position.z = height;
-                    }
+        }
         pub_traj.publish(msg_traj);
 
         if (verbose)
