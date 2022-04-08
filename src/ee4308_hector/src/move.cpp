@@ -196,31 +196,8 @@ int main(int argc, char **argv)
     double U_ang_z = 0;
     double ang_acc_z;
     double cmd_ang_vel_z_prev = 0;
-    
 
-    // double cmd_lin_vel = 0, cmd_ang_vel = 0;
-
-    // double error_lin;
-    // double error_lin_prev = 0;
-    // double error_lin_sum =0;
-    // double P_lin = 0;
-    // double I_lin = 0;
-    // double D_lin = 0;
-    // double U_lin = 0;
-    // double lin_acc;
-    // double cmd_lin_vel_prev =0;
-
-    // double ang_error ;
-    // double ang_error_prev = 0;
-    // double ang_error_sum = 0;
-    // double P_ang = 0;
-    // double I_ang = 0;
-    // double D_ang = 0;
-    // double U_ang = 0;
-    // double ang_acc;
-    // double cmd_ang_vel_prev =0;
-
-    // int cnt = 0;
+    double cmd_lin_vel = 0;
 
     // main loop
     while (ros::ok() && nh.param("run", true))
@@ -270,7 +247,7 @@ int main(int argc, char **argv)
 
         lin_acc_x = (U_lin_x - cmd_lin_vel_x_prev) / dt;
         cmd_lin_vel_x_prev = cmd_lin_vel_x;
-        cmd_lin_vel_x = sat((U_lin_x + lin_acc_x * dt), max_lin_vel);
+        cmd_lin_vel_x = (U_lin_x + lin_acc_x * dt);
 
         ROS_INFO_STREAM("LIN_X_ERROR" << error_lin_x << " P_lin_x" << P_lin_x << " I_lin_x" << I_lin_x << " D_lin_x" << D_lin_x);
 
@@ -284,23 +261,20 @@ int main(int argc, char **argv)
 
         lin_acc_y = (U_lin_y - cmd_lin_vel_y_prev) / dt;
         cmd_lin_vel_y_prev = cmd_lin_vel_y;
-        cmd_lin_vel_y = sat((U_lin_y + lin_acc_y * dt), max_lin_vel);
+        cmd_lin_vel_y = U_lin_y + lin_acc_y * dt;
+
+        // Saturate to Max Speed on Each Axes
+        cmd_lin_vel = sqrt(cmd_lin_vel_x*cmd_lin_vel_x + cmd_lin_vel_y*cmd_lin_vel_y);
+        if (cmd_lin_vel > max_lin_vel) {
+                cmd_lin_vel_x *= max_lin_vel/cmd_lin_vel;
+                cmd_lin_vel_y *= max_lin_vel/cmd_lin_vel;
+        }
 
         ROS_INFO_STREAM("LIN_Y_ERROR" << error_lin_y);
 
-        // ANG_Z
-        // TODO: Check if the angle a is correct
-        error_ang_z = limit_angle(heading(SRC_NED_XYZ(0,0),SRC_NED_XYZ(0,1),TARGET_NED_XYZ(0,0), TARGET_NED_XYZ(0,1)) - BODY_FRAME_YAW);
-        error_ang_z_sum += error_ang_z * dt;
-        P_ang_z = Kp_z * error_ang_z;
-        I_ang_z = I_ang_z + Ki_z*a;
-        D_ang_z = Kd_z*((BODY_FRAME_YAW - error_ang_z_prev)/dt);
-        U_ang_z = P_ang_z + I_ang_z + D_ang_z;
-        error_ang_z_prev = error_ang_z;
 
-        ang_acc_z = (U_ang_z - cmd_ang_vel_z_prev) / dt;
-        cmd_ang_vel_z_prev = cmd_lin_vel_a;
-        cmd_lin_vel_a = yaw_rate;
+        // ANG_Z
+        cmd_lin_vel_a = rotate ? yaw_rate : 0;
 
         // publish speeds
         msg_cmd.linear.x = cmd_lin_vel_x;

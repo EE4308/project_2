@@ -2,7 +2,7 @@
 verbose_main: false
 main_iter_rate: 40
 height: 2
-look_ahead: 10
+look_ahead: 1
 close_enough: 0.2
 average_speed: 2.0
 
@@ -33,7 +33,7 @@ Kp_lin: 1
 Ki_lin: 0.0
 Kd_lin: 0.1
 Kp_z: 1
-Ki_z: 0.0
+Ki_z: 0.01
 Kd_z: 0.1
 yaw_rate: 0.5
 max_lin_vel: 2
