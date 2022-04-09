@@ -2,13 +2,14 @@
 verbose_main: false
 main_iter_rate: 40
 height: 2
-look_ahead: 1
+look_ahead: 0.4
 close_enough: 0.2
 average_speed: 2.0
+use_cubic_spline: false
 
 # motion
 verbose_motion: true
-use_ground_truth: false
+use_ground_truth: true
 qa: 1
 qx: 1
 qy: 1
