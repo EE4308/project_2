@@ -200,7 +200,7 @@ void cbMagnet(const geometry_msgs::Vector3Stamped::ConstPtr &msg)
     
     //Variance calculation
     yawlist.push_back(a_mgn);
-    //calculate varience every 100
+    //calculate variance every 100
     if(yawlist.size() >= 100 && tune_covariance){
         r_mgn_a = variance(yawlist);
         yawlist.clear();
