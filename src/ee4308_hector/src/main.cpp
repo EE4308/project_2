@@ -41,7 +41,7 @@ std::string to_string(HectorState state)
     }
 }
 
-bool verbose;
+bool verbose, use_cubic_spline;
 double initial_x, initial_y, initial_z;
 double x = NaN, y = NaN, z = NaN, a = NaN;
 void cbHPose(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr &msg)
@@ -104,6 +104,8 @@ int main(int argc, char **argv)
         ROS_WARN(" HMAIN : Param average_speed not found, set to 2.0");
     if (!nh.param("verbose_main", verbose, true))
         ROS_WARN(" HMAIN : Param verbose_main not found, set to false");
+    if (!nh.param("use_cubic_spline", use_cubic_spline, false))
+        ROS_WARN(" HMAIN : Param use_cubic_spline not found, set use_cubic_spline to false");
     // get the final goal position of turtle
     std::string goal_str;
     double goal_x = NaN, goal_y = NaN;
@@ -192,7 +194,15 @@ int main(int argc, char **argv)
         case TURTLE:
         {
             // Update trajectory towards final GOAL
-            trajectory = generate_full_trajectory(x, y, goal_x, goal_y, initial_x, initial_y);
+            if (use_cubic_spline)
+            {
+                trajectory = generate_full_trajectory(x, y, goal_x, goal_y, initial_x, initial_y);
+            }
+            else
+            {
+                trajectory = generate_straight_line_trajectory(x, y, goal_x, goal_y, initial_x, initial_y, look_ahead);
+            }
+
             if (dist_euc(x, y, goal_x, goal_y) < close_enough)
             {
                 state = GOAL;
@@ -203,25 +213,47 @@ int main(int argc, char **argv)
         case START:
         {
             // Update trajectory towards turtle pos
-            trajectory = generate_full_trajectory(x, y, turtle_x, turtle_y, goal_x, goal_y);
+            if (use_cubic_spline)
+            {
+                trajectory = generate_full_trajectory(x, y, turtle_x, turtle_y, goal_x, goal_y);
+            }
+            else
+            {
+                trajectory = generate_straight_line_trajectory(x, y, turtle_x, turtle_y, goal_x, goal_y, look_ahead);
+            }
             if (dist_euc(x, y, turtle_x, turtle_y) < close_enough)
             {
                 state = TURTLE;
                 ROS_INFO_STREAM("[TURTLE] Entered TURTLE state");
             }
+            if (dist_euc(x,y, initial_x, initial_y) < close_enough && !nh.param("/turtle/run",false)){
+                state = LAND;
+                ROS_INFO_STREAM("[LAND] Entered LAND state");
+            }
             break;
         }
         case GOAL:
         {
-            // Update traj towards START, if reach start, update state to start
+            // Update traj towards START
             if (!nh.param("/turtle/run", false))
             {
-                trajectory = generate_trajectory(x, y, initial_x, initial_y);
-                state = LAND;
+                if (use_cubic_spline) {
+                    trajectory = generate_trajectory(x, y, initial_x, initial_y);
+                } else {
+                    trajectory = generate_straight_line_trajectory(x,y, initial_x, initial_y, initial_x, initial_y, look_ahead);
+                }
             }
             else
             {
-                trajectory = generate_full_trajectory(x, y, initial_x, initial_y, turtle_x, turtle_y);
+                // Update traj towards START, if reach start, update state to start
+                if (use_cubic_spline)
+                {
+                    trajectory = generate_full_trajectory(x, y, initial_x, initial_y, turtle_x, turtle_y);
+                }
+                else
+                {
+                    trajectory = generate_straight_line_trajectory(x, y, initial_x, initial_y, turtle_x, turtle_y, look_ahead);
+                }
             }
             if (dist_euc(x, y, initial_x, initial_y) < close_enough)
             {
@@ -254,18 +286,25 @@ int main(int argc, char **argv)
         // Publish target
         if (trajectory.size() > 0)
         {
-            double look_ahead_index = look_ahead * 10;
-            // If trajectory is larger than look_ahead distance
-            if (trajectory.size() > look_ahead_index + 1)
+            if (use_cubic_spline)
             {
-                msg_target.point.x = trajectory.at(look_ahead_index).x;
-                msg_target.point.y = trajectory.at(look_ahead_index).y;
+                double look_ahead_index = look_ahead * 10;
+                // If trajectory is larger than look_ahead distance
+                if (trajectory.size() > look_ahead_index + 1)
+                {
+                    msg_target.point.x = trajectory.at(look_ahead_index).x;
+                    msg_target.point.y = trajectory.at(look_ahead_index).y;
+                }
+                else
+                {
+                    msg_target.point.x =  trajectory.at(trajectory.size() - 1).x;
+                    msg_target.point.y =  trajectory.at(trajectory.size() - 1).y;
+                }
+            } else {
+                msg_target.point.x = trajectory.at(1).x;
+                msg_target.point.y = trajectory.at(1).y;
             }
-            else
-            {
-                msg_target.point.x = trajectory.at(trajectory.size()-1).x;
-                msg_target.point.y = trajectory.at(trajectory.size()-1).y;
-            }
+
             msg_target.point.z = height;
         }
         pub_target.publish(msg_target);

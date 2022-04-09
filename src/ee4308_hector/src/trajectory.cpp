@@ -74,3 +74,29 @@ std::vector<Position> generate_trajectory(double x_begin, double y_begin, double
 
     return trajectory;
 }
+
+std::vector<Position> generate_straight_line_trajectory(double x_begin, double y_begin, double goal_1_x, double goal_1_y, double goal_2_x, double goal_2_y, double look_ahead_duration)
+{
+    std::vector<Position> trajectory;
+    // Add current pos
+    trajectory.emplace_back(x_begin,y_begin);
+
+    double Dx = goal_1_x - x_begin;
+    double Dy = goal_1_y - y_begin;
+
+    double target_pos_x = x_begin + Dx* look_ahead_duration;
+    double target_pos_y = y_begin + Dy* look_ahead_duration;
+    if (!(dist_euc(target_pos_x, target_pos_y, goal_1_x, goal_1_y) < look_ahead_duration))
+    {
+        // Add intermediate target
+        trajectory.emplace_back(
+            target_pos_x,
+            target_pos_y);
+    }
+
+    // Add traj to subsequent goals
+    trajectory.emplace_back(goal_1_x, goal_1_y);
+    trajectory.emplace_back(goal_2_x, goal_2_y);
+
+    return trajectory;
+}
