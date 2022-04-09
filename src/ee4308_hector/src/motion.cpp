@@ -247,8 +247,8 @@ void cbBaro(const hector_uav_msgs::Altimeter::ConstPtr &msg)
     double V_bar = 1;
     double R_bar = r_bar_z;
 
-    cv::Matx31d K_bar;
     // correction
+    cv::Matx31d K_bar;
     K_bar = P_z * H_bar.t() * (1/((H_bar * P_z * H_bar.t())(0) + V_bar * R_bar * V_bar));
     ROS_WARN("bias: %f, k_BAR: %f %f %f", Z(2), K_bar(0), K_bar(1), K_bar(2));
     Z = Z + K_bar * (Y_bar - h_X_bar - Z(2));
