@@ -10,9 +10,11 @@
 #include <hector_uav_msgs/EnableMotors.h>
 #include <std_msgs/Bool.h>
 #include <opencv2/core/core.hpp>
+#include <iostream>
 #include <fstream>
 #include <signal.h>
 #include "common.hpp"
+#include <string>
 #define NaN std::numeric_limits<double>::quiet_NaN()
 
 double sat(double x, double x2)
@@ -198,6 +200,11 @@ int main(int argc, char **argv)
     double cmd_ang_vel_z_prev = 0;
 
     double cmd_lin_vel = 0;
+    double error_lin = 0;
+
+    // Log File
+    std::vector<std::string> log_array;
+    double count = 0;
 
     // main loop
     while (ros::ok() && nh.param("run", true))
@@ -218,6 +225,7 @@ int main(int argc, char **argv)
         ROS_INFO_STREAM("[COORDS]" <<"WORLD_FRAME_XYZ" << WORLD_FRAME_XYZ << " SRC_NED_XYZ " << SRC_NED_XYZ << " TARGET_NED_XYZ" << TARGET_NED_XYZ);
         BODY_FRAME_YAW = -a;
 
+        error_lin = dist_euc(target_x, target_y, x,y);
         // Calculate errors from
         error_lin_x = cos(-a) * (target_x - x) - sin(-a) * (target_y - y);
         error_lin_y = sin(-a) * (target_x - x) + cos(-a) * (target_y - y);
@@ -271,10 +279,15 @@ int main(int argc, char **argv)
         }
 
         ROS_INFO_STREAM("LIN_Y_ERROR" << error_lin_y);
-
-
+        
         // ANG_Z
         cmd_lin_vel_a = rotate ? yaw_rate : 0;
+
+        // Log Error
+        std::ostringstream oss;
+        oss << "\t" << count << "\t" << error_lin << "\t" << error_lin_x << "\t" << error_lin_y << "\t" << error_lin_z;
+        log_array.push_back(oss.str());
+        count++;
 
         // publish speeds
         msg_cmd.linear.x = cmd_lin_vel_x;
@@ -295,6 +308,10 @@ int main(int argc, char **argv)
         rate.sleep();
     }
 
+    // Log to Terminal
+    for (std::string &str : log_array){
+        ROS_INFO_STREAM(str);
+    }
     // attempt to stop the motors (does not work if ros wants to shutdown)
     msg_cmd.linear.x = 0;
     msg_cmd.linear.y = 0;
