@@ -269,6 +269,8 @@ int main(int argc, char **argv)
                 trajectory.clear();
                 msg_rotate.data = false;
                 pub_rotate.publish(msg_rotate);
+                msg_target.point.x = x;
+                msg_target.point.y = y;
                 msg_target.point.z = 0.0;
             }
             else
