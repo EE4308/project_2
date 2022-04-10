@@ -236,7 +236,7 @@ int main(int argc, char **argv)
         // LIN_Z
         error_lin_z_sum += error_lin_z * dt;
         P_lin_z = Kp_z * error_lin_z;
-        I_lin_z = I_lin_z + (Ki_lin * error_lin_z);
+        I_lin_z = I_lin_z + (Ki_z * error_lin_z);
         D_lin_z = Kd_z * ((error_lin_z - error_lin_z_prev) / dt);
         U_lin_z = P_lin_z + I_lin_z + D_lin_z;
         error_lin_z_prev = error_lin_z;

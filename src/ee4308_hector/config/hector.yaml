@@ -31,8 +31,8 @@ tune_covariance: false
 enable_move: true
 verbose_move: true
 Kp_lin: 1.0
-Ki_lin: 0.001
-Kd_lin: 0.2
+Ki_lin: 0
+Kd_lin: 0.1
 Kp_z: 0.6
 Ki_z: 0
 Kd_z: 0.1
