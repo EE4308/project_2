@@ -267,14 +267,18 @@ void cbSonar(const sensor_msgs::Range::ConstPtr &msg)
 
     //// IMPLEMENT SONAR ////
     z_snr = msg->range;
-    // if(sonar_list.size() != 0 && mean(sonar_list) >= 1.9){
-    //     z_snr = 0.95*mean(sonar_list) + 0.05*z_snr;
-    // }
-    if(abs(z_snr-z_snr_old) >= 0.2){
-        z_snr = z_snr_old;
+    ROS_INFO_STREAM("[HM] SONAR READING " << z_snr );
+    if(sonar_list.size() != 0 && mean(sonar_list)){
+        z_snr = 0.3*mean(sonar_list) + 0.7*z_snr;
+        ROS_INFO_STREAM("[HM] SONAR WEIGHTED AVERAGE " << z_snr);
     }
-    sonar_list.push_back(z_snr);
-
+    if (sonar_list.size() < 100) {
+        sonar_list.push_back(z_snr);
+    } else {
+        sonar_list.erase(sonar_list.begin());
+        sonar_list.push_back(z_snr);
+    }
+     
 
     //check if the value is changing more than min height
     //height is 2m lowest for obstacle
